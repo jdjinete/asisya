@@ -1,6 +1,10 @@
+using Asisya.Application;
 using Asisya.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Application layer (MediatR CQRS handlers, FluentValidation)
+builder.Services.AddApplicationServices();
 
 // Add Infrastructure persistence and database services
 builder.Services.AddInfrastructureServices(builder.Configuration);
