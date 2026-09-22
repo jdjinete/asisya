@@ -1,3 +1,4 @@
+using Asisya.Application.Common.Interfaces;
 using Asisya.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -34,6 +35,9 @@ public static class DependencyInjection
                     errorCodesToAdd: null);
             });
         });
+
+        // Register IApplicationDbContext mapping to AsisyaDbContext
+        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<AsisyaDbContext>());
 
         return services;
     }

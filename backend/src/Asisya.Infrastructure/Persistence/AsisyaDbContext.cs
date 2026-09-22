@@ -1,13 +1,16 @@
+using Asisya.Application.Common.Interfaces;
 using Asisya.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Asisya.Infrastructure.Persistence;
 
 /// <summary>
 /// Entity Framework Core database context for the ASISYA enterprise application.
 /// Manages entity configurations, relational constraints, and connection lifecycle to PostgreSQL.
+/// Implements <see cref="IApplicationDbContext"/> for application layer decoupling.
 /// </summary>
-public class AsisyaDbContext : DbContext
+public class AsisyaDbContext : DbContext, IApplicationDbContext
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AsisyaDbContext"/> class.
@@ -18,45 +21,41 @@ public class AsisyaDbContext : DbContext
     {
     }
 
-    /// <summary>
-    /// Gets the Categories database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<Category> Categories => Set<Category>();
 
-    /// <summary>
-    /// Gets the Products database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<Product> Products => Set<Product>();
 
-    /// <summary>
-    /// Gets the Suppliers database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<Supplier> Suppliers => Set<Supplier>();
 
-    /// <summary>
-    /// Gets the Customers database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<Customer> Customers => Set<Customer>();
 
-    /// <summary>
-    /// Gets the Employees database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<Employee> Employees => Set<Employee>();
 
-    /// <summary>
-    /// Gets the Shippers database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<Shipper> Shippers => Set<Shipper>();
 
-    /// <summary>
-    /// Gets the Orders database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<Order> Orders => Set<Order>();
 
-    /// <summary>
-    /// Gets the OrderDetails database set.
-    /// </summary>
+    /// <inheritdoc />
     public DbSet<OrderDetail> OrderDetails => Set<OrderDetail>();
+
+    /// <inheritdoc />
+    public virtual Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        return Database.BeginTransactionAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual void ClearChangeTracker()
+    {
+        ChangeTracker.Clear();
+    }
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
