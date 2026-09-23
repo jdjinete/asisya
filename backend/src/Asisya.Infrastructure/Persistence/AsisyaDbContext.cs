@@ -1,7 +1,6 @@
 using Asisya.Application.Common.Interfaces;
 using Asisya.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Asisya.Infrastructure.Persistence;
 
@@ -46,9 +45,26 @@ public class AsisyaDbContext : DbContext, IApplicationDbContext
     public DbSet<OrderDetail> OrderDetails => Set<OrderDetail>();
 
     /// <inheritdoc />
-    public virtual Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
     {
-        return Database.BeginTransactionAsync(cancellationToken);
+        var strategy = Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var result = await operation(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        });
     }
 
     /// <inheritdoc />

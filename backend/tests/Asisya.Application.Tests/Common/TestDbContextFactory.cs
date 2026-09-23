@@ -1,13 +1,10 @@
-using Asisya.Domain.Entities;
 using Asisya.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
-using NSubstitute;
 
 namespace Asisya.Application.Tests.Common;
 
 /// <summary>
-/// Subclass of AsisyaDbContext overriding BeginTransactionAsync to provide a stub transaction for InMemory tests.
+/// Subclass of AsisyaDbContext overriding ExecuteInTransactionAsync for in-memory unit tests.
 /// </summary>
 public class TestAsisyaDbContext : AsisyaDbContext
 {
@@ -16,10 +13,11 @@ public class TestAsisyaDbContext : AsisyaDbContext
     {
     }
 
-    public override Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public override Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
     {
-        var transaction = Substitute.For<IDbContextTransaction>();
-        return Task.FromResult(transaction);
+        return operation(cancellationToken);
     }
 }
 

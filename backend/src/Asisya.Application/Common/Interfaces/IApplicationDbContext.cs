@@ -1,12 +1,11 @@
 using Asisya.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Asisya.Application.Common.Interfaces;
 
 /// <summary>
 /// Abstraction for database persistence operations decoupled from the Infrastructure layer.
-/// Exposes Entity Framework Core DbSets and transaction management.
+/// Exposes Entity Framework Core DbSets and transaction execution strategy.
 /// </summary>
 public interface IApplicationDbContext
 {
@@ -56,9 +55,11 @@ public interface IApplicationDbContext
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Begins a database transaction asynchronously.
+    /// Executes an operation within a resilient transactional execution strategy compatible with retry policies.
     /// </summary>
-    Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+    Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Clears the EF Core change tracker to prevent memory pressure (LOH) and O(N^2) change tracking overhead during bulk batch inserts.

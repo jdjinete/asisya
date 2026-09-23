@@ -10,7 +10,8 @@ namespace Asisya.Application.Features.Products.Commands.BulkCreateProducts;
 /// High-performance MediatR handler for <see cref="BulkCreateProductsCommand"/>.
 /// 
 /// Batching Strategy:
-/// 1. Transactional Boundary: Wraps the entire operation inside a single atomic database transaction.
+/// 1. Transactional Execution Strategy: Uses <see cref="IApplicationDbContext.ExecuteInTransactionAsync"/>
+///    compatible with NpgsqlRetryingExecutionStrategy.
 /// 2. Chunking (1,000 items per roundtrip): Avoids reaching PostgreSQL parameter limits (65,535 max)
 ///    and prevents Large Object Heap (LOH) memory allocation spikes.
 /// 3. Change Tracker Eviction: Invokes <see cref="IApplicationDbContext.ClearChangeTracker"/> after
@@ -47,14 +48,15 @@ public class BulkCreateProductsCommandHandler : IRequestHandler<BulkCreateProduc
 
         var batchSize = request.BatchSize > 0 ? request.BatchSize : 1000;
 
-        using var transaction = await _context.BeginTransactionAsync(cancellationToken);
-        try
+        var (successCount, failCount) = await _context.ExecuteInTransactionAsync(async ct =>
         {
+            int batchSuccess = 0;
+            int batchFail = 0;
+
             if (request.GenerateRandomCount.HasValue && request.GenerateRandomCount.Value > 0)
             {
                 totalToProcess = request.GenerateRandomCount.Value;
                 var random = new Random(42); // Deterministic seed for reproducible testing
-                var categories = new[] { servidoresId, cloudId };
                 var serverPrefixes = new[] { "Dell PowerEdge", "HP ProLiant", "Lenovo ThinkSystem", "Cisco UCS", "Supermicro" };
                 var cloudPrefixes = new[] { "AWS EC2 Instance", "Azure VM Standard", "GCP Compute Engine", "Kubernetes Node Pod", "Cloud Dedicated Host" };
 
@@ -84,20 +86,20 @@ public class BulkCreateProductsCommandHandler : IRequestHandler<BulkCreateProduc
 
                     if (currentChunk.Count >= batchSize)
                     {
-                        await _context.Products.AddRangeAsync(currentChunk, cancellationToken);
-                        await _context.SaveChangesAsync(cancellationToken);
+                        await _context.Products.AddRangeAsync(currentChunk, ct);
+                        await _context.SaveChangesAsync(ct);
                         _context.ClearChangeTracker();
-                        successfulImports += currentChunk.Count;
+                        batchSuccess += currentChunk.Count;
                         currentChunk.Clear();
                     }
                 }
 
                 if (currentChunk.Count > 0)
                 {
-                    await _context.Products.AddRangeAsync(currentChunk, cancellationToken);
-                    await _context.SaveChangesAsync(cancellationToken);
+                    await _context.Products.AddRangeAsync(currentChunk, ct);
+                    await _context.SaveChangesAsync(ct);
                     _context.ClearChangeTracker();
-                    successfulImports += currentChunk.Count;
+                    batchSuccess += currentChunk.Count;
                     currentChunk.Clear();
                 }
             }
@@ -110,7 +112,7 @@ public class BulkCreateProductsCommandHandler : IRequestHandler<BulkCreateProduc
                 {
                     if (string.IsNullOrWhiteSpace(item.ProductName))
                     {
-                        failedImports++;
+                        batchFail++;
                         errors.Add("Encountered product item with empty or null ProductName.");
                         continue;
                     }
@@ -130,32 +132,29 @@ public class BulkCreateProductsCommandHandler : IRequestHandler<BulkCreateProduc
 
                     if (currentChunk.Count >= batchSize)
                     {
-                        await _context.Products.AddRangeAsync(currentChunk, cancellationToken);
-                        await _context.SaveChangesAsync(cancellationToken);
+                        await _context.Products.AddRangeAsync(currentChunk, ct);
+                        await _context.SaveChangesAsync(ct);
                         _context.ClearChangeTracker();
-                        successfulImports += currentChunk.Count;
+                        batchSuccess += currentChunk.Count;
                         currentChunk.Clear();
                     }
                 }
 
                 if (currentChunk.Count > 0)
                 {
-                    await _context.Products.AddRangeAsync(currentChunk, cancellationToken);
-                    await _context.SaveChangesAsync(cancellationToken);
+                    await _context.Products.AddRangeAsync(currentChunk, ct);
+                    await _context.SaveChangesAsync(ct);
                     _context.ClearChangeTracker();
-                    successfulImports += currentChunk.Count;
+                    batchSuccess += currentChunk.Count;
                     currentChunk.Clear();
                 }
             }
 
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            errors.Add($"Transaction rolled back due to error: {ex.Message}");
-            throw;
-        }
+            return (batchSuccess, batchFail);
+        }, cancellationToken);
+
+        successfulImports = successCount;
+        failedImports = failCount;
 
         stopwatch.Stop();
 
