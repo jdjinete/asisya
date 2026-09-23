@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Server, LogOut, Package, Database, ClipboardList, Activity } from 'lucide-react';
+import { CategoryManagementModal } from './CategoryManagementModal';
+import { Server, LogOut, Package, Database, ClipboardList, Activity, Tags } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -25,6 +27,13 @@ export const Navbar: React.FC = () => {
           <Link to="/products" className="btn btn-outline btn-sm">
             <Package size={16} /> Products
           </Link>
+          <button
+            type="button"
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="btn btn-outline btn-sm"
+          >
+            <Tags size={16} /> Categories
+          </button>
           <Link to="/audit-logs" className="btn btn-outline btn-sm">
             <ClipboardList size={16} /> Audit Logs
           </Link>
@@ -69,6 +78,11 @@ export const Navbar: React.FC = () => {
           </button>
         </div>
       )}
+
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+      />
     </header>
   );
 };
