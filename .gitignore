@@ -1,0 +1,14 @@
+# Artefactos de IA y herramientas
+.engram/
+.codegraph/
+.gentle/
+.claude/
+.cursor/
+.vscode/
+
+# Entornos de desarrollo (.NET y React)
+bin/
+obj/
+node_modules/
+dist/
+.env
