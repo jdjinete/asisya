@@ -313,9 +313,34 @@ Content-Type: application/problem+json
 
 ---
 
+### 4.7 Automated Data Auditing (`AuditLogs` via EF Core Interceptor)
+Every database modification (`Insert`, `Update`, `Delete`) across domain entities is automatically captured by `AuditableEntitySaveChangesInterceptor` and persisted to the `AuditLogs` table. It captures:
+- Table name and mutation action
+- Authenticated user identity (`UserId` / `email`) extracted dynamically from the JWT Bearer token via `ICurrentUserService`
+- Change deltas serialized in JSON (`OldValues` and `NewValues`)
+- UTC Timestamp
+
+To verify the audit log history directly in PostgreSQL:
+```bash
+docker exec -i asisya-postgres psql -U asisya_user -d asisya_db -c 'SELECT "Id", "TableName", "Action", "UserId", "TimestampUtc", "NewValues" FROM "AuditLogs" ORDER BY "Id" DESC LIMIT 5;'
+```
+
+---
+
+### 4.8 Fault Tolerance & Dead Letter Queue (DLQ in RabbitMQ)
+The batch processing worker implements enterprise fault tolerance:
+1. **Retry Policy:** Configured via `UseMessageRetry(r => r.Interval(3, TimeSpan.FromSeconds(2)))`. If a transient database timeout or network blip occurs, MassTransit retries processing up to 3 times before declaring a fault.
+2. **Dead Letter Queue (DLQ):** If all retries are exhausted, MassTransit automatically routes the message to the dedicated error queue **`BulkCreateProducts_error`**.
+3. **Zero Message Loss:** The failed message is preserved in the DLQ with full diagnostic headers (`MT-Fault-Message`, `MT-Fault-StackTrace`, `MT-Fault-Timestamp`).
+4. **Verifying in RabbitMQ Dashboard:**
+   - Open [http://localhost:15672](http://localhost:15672) (User: `guest`, Password: `guest`).
+   - Navigate to **Queues** to inspect `BulkCreateProducts` and its fault queue `BulkCreateProducts_error`.
+
+---
+
 ## 5. Running Automated Tests
 
-Run the full xUnit test suite (covering unit tests for bulk batching, change tracker eviction, search filters, and JWT authentication):
+Run the full xUnit test suite (covering unit tests for bulk batching, change tracker eviction, search filters, JWT authentication, and automatic data auditing):
 
 ```bash
 dotnet test backend/Asisya.sln
@@ -323,7 +348,7 @@ dotnet test backend/Asisya.sln
 
 Test Results:
 ```text
-Passed!  - Failed: 0, Passed: 18, Skipped: 0, Total: 18, Duration: 559 ms
+Passed!  - Failed: 0, Passed: 22, Skipped: 0, Total: 22, Duration: 573 ms
 ```
 
 ---
@@ -331,7 +356,7 @@ Passed!  - Failed: 0, Passed: 18, Skipped: 0, Total: 18, Duration: 559 ms
 ## 6. Continuous Integration & Pipeline (GitHub Actions)
 
 The repository includes a production-ready CI/CD pipeline defined in `.github/workflows/pipeline.yml`:
-1. **Backend CI:** Restores, builds, and executes all 18 xUnit unit tests on .NET 8.
+1. **Backend CI:** Restores, builds, and executes all 22 xUnit unit tests on .NET 8.
 2. **Frontend CI:** Installs dependencies, runs ESLint code quality checks, and compiles the production Vite web bundle.
 3. **Docker Validation:** Validates that both multi-stage Dockerfiles (`backend/Dockerfile` and `frontend/Dockerfile`) compile without errors prior to merge.
 
@@ -356,6 +381,10 @@ During the design and implementation, the following technical assumptions were m
    - *Decision:* Predefined enterprise categories `'SERVIDORES'` and `'CLOUD'` are automatically normalized to uppercase and seeded if absent during bulk ingestion, ensuring foreign key referential integrity at all times.
 5. **JWT Token Structure and Security Defaults:**
    - *Decision:* Signed using HMAC-SHA256 with standard claims (`sub`, `email`, `role`, `jti`, `organization`) and a 60-minute lifetime. Default evaluation accounts (`admin@asisya.com` / `Admin123!` and `operator@asisya.com` / `Operator123!`) are preconfigured for instant evaluation.
+6. **Automatic Data Auditing (`ISaveChangesInterceptor`) & User Identity:**
+   - *Decision:* Implemented `AuditableEntitySaveChangesInterceptor` to track entity mutations without polluting application handlers or domain models. User identity is dynamically resolved via `ICurrentUserService` from JWT bearer claims, falling back safely to `"System / BackgroundWorker"` when executed asynchronously via MassTransit.
+7. **Fault Tolerance Retry Policy & Dead Letter Queue (DLQ):**
+   - *Decision:* Configured MassTransit retry policy (`Interval(3, 2s)`) with automatic routing to `BulkCreateProducts_error` upon poison messages or unrecoverable database errors, ensuring zero data loss and persistent diagnostic traces.
 
 ---
 
