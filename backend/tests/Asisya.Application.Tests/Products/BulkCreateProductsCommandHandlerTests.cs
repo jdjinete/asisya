@@ -1,26 +1,31 @@
 using Asisya.Application.Features.Products.Commands.BulkCreateProducts;
-using Asisya.Application.Tests.Common;
+using Asisya.Application.Features.Products.Events;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
+using FluentValidation;
+using MassTransit;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
 using Xunit;
 
 namespace Asisya.Application.Tests.Products;
 
-public class BulkCreateProductsCommandHandlerTests : IDisposable
+public class BulkCreateProductsCommandHandlerTests
 {
-    private readonly TestAsisyaDbContext _context;
+    private readonly IPublishEndpoint _publishEndpoint;
+    private readonly ILogger<BulkCreateProductsCommandHandler> _logger;
     private readonly BulkCreateProductsCommandHandler _handler;
 
     public BulkCreateProductsCommandHandlerTests()
     {
-        _context = TestDbContextFactory.Create();
-        _handler = new BulkCreateProductsCommandHandler(_context);
+        _publishEndpoint = Substitute.For<IPublishEndpoint>();
+        _logger = Substitute.For<ILogger<BulkCreateProductsCommandHandler>>();
+        _handler = new BulkCreateProductsCommandHandler(_publishEndpoint, _logger);
     }
 
     [Fact]
-    public async Task Handle_ShouldGenerateAndInsertRandomProducts_InBatches()
+    public async Task Handle_ShouldPublishBatchProductsReceivedEvent_WhenRandomCountSpecified()
     {
-        // Arrange: Generate 2,500 products with a batch size of 500
+        // Arrange
         var command = new BulkCreateProductsCommand
         {
             GenerateRandomCount = 2500,
@@ -31,28 +36,21 @@ public class BulkCreateProductsCommandHandlerTests : IDisposable
         var result = await _handler.Handle(command, CancellationToken.None);
 
         // Assert
+        result.Should().NotBeNull();
+        result.Status.Should().Be("Accepted");
         result.TotalProcessed.Should().Be(2500);
-        result.SuccessfulImports.Should().Be(2500);
-        result.FailedImports.Should().Be(0);
-        result.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(0);
+        result.BatchId.Should().NotBeEmpty();
 
-        var totalInDb = await _context.Products.CountAsync();
-        totalInDb.Should().Be(2500);
-
-        // Verify products are distributed across SERVIDORES and CLOUD
-        var servidoresCategory = await _context.Categories.FirstAsync(c => c.CategoryName == "SERVIDORES");
-        var cloudCategory = await _context.Categories.FirstAsync(c => c.CategoryName == "CLOUD");
-
-        var servidoresCount = await _context.Products.CountAsync(p => p.CategoryId == servidoresCategory.CategoryId);
-        var cloudCount = await _context.Products.CountAsync(p => p.CategoryId == cloudCategory.CategoryId);
-
-        servidoresCount.Should().BeGreaterThan(1000);
-        cloudCount.Should().BeGreaterThan(1000);
-        (servidoresCount + cloudCount).Should().Be(2500);
+        await _publishEndpoint.Received(1).Publish(
+            Arg.Is<BatchProductsReceivedEvent>(e =>
+                e.BatchId == result.BatchId &&
+                e.GenerateRandomCount == 2500 &&
+                e.BatchSize == 500),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_ShouldImportExplicitProductsList_Successfully()
+    public async Task Handle_ShouldPublishBatchProductsReceivedEvent_WhenProductsListSpecified()
     {
         // Arrange
         var products = new List<BulkCreateProductItemDto>
@@ -72,46 +70,37 @@ public class BulkCreateProductsCommandHandlerTests : IDisposable
         var result = await _handler.Handle(command, CancellationToken.None);
 
         // Assert
+        result.Should().NotBeNull();
+        result.Status.Should().Be("Accepted");
         result.TotalProcessed.Should().Be(3);
-        result.SuccessfulImports.Should().Be(3);
-        result.FailedImports.Should().Be(0);
+        result.BatchId.Should().NotBeEmpty();
 
-        var count = await _context.Products.CountAsync();
-        count.Should().Be(3);
+        await _publishEndpoint.Received(1).Publish(
+            Arg.Is<BatchProductsReceivedEvent>(e =>
+                e.BatchId == result.BatchId &&
+                e.Products != null &&
+                e.Products.Count == 3 &&
+                e.BatchSize == 2),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_ShouldRecordFailedImports_WhenProductNameIsInvalid()
+    public async Task Handle_ShouldThrowValidationException_WhenBothProductsAndRandomCountMissing()
     {
-        // Arrange: one invalid product name
-        var products = new List<BulkCreateProductItemDto>
-        {
-            new() { ProductName = "Valid Product 1", UnitPrice = 10.00m },
-            new() { ProductName = "", UnitPrice = 20.00m }, // Invalid
-            new() { ProductName = "Valid Product 2", UnitPrice = 30.00m }
-        };
-
+        // Arrange
         var command = new BulkCreateProductsCommand
         {
-            Products = products,
-            BatchSize = 10
+            GenerateRandomCount = null,
+            Products = null
         };
 
         // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
+        var act = () => _handler.Handle(command, CancellationToken.None);
 
         // Assert
-        result.TotalProcessed.Should().Be(3);
-        result.SuccessfulImports.Should().Be(2);
-        result.FailedImports.Should().Be(1);
-        result.Errors.Should().Contain(e => e.Contains("empty or null"));
+        await act.Should().ThrowAsync<ValidationException>()
+            .WithMessage("*Either 'GenerateRandomCount'*or 'Products'*");
 
-        var count = await _context.Products.CountAsync();
-        count.Should().Be(2);
-    }
-
-    public void Dispose()
-    {
-        TestDbContextFactory.Destroy(_context);
+        await _publishEndpoint.DidNotReceiveWithAnyArgs().Publish<BatchProductsReceivedEvent>(default!);
     }
 }
