@@ -73,25 +73,25 @@ public class ProductsController : ControllerBase
     }
 
     /// <summary>
-    /// Performs high-volume transactional streaming batch ingestion of products.
+    /// Performs high-volume asynchronous batch ingestion of products via RabbitMQ message queue.
     /// Accessible via POST /Product or POST /Products/bulk. Requires JWT Authorization.
-    /// Supports explicit product payloads or synthetic generation of up to 100,000 items.
+    /// Validates payload, enqueues BatchProductsReceivedEvent, and immediately returns HTTP 202 Accepted.
     /// </summary>
     /// <param name="command">Bulk payload or synthetic count configuration.</param>
-    /// <returns>Execution summary with metrics on imported vs failed records.</returns>
+    /// <returns>Accepted acknowledgment with correlation BatchId and queue status.</returns>
     [HttpPost]
     [HttpPost("/Product")]
     [HttpPost("bulk")]
     [Authorize]
-    [ProducesResponseType(typeof(BulkCreateProductsResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BulkCreateProductsResult), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> BulkCreateProducts([FromBody] BulkCreateProductsCommand command)
     {
-        _logger.LogInformation("Initiating bulk product ingestion. SyntheticCount: {Count}, ExplicitCount: {ExplicitCount}",
+        _logger.LogInformation("Enqueuing bulk product ingestion. SyntheticCount: {Count}, ExplicitCount: {ExplicitCount}",
             command.GenerateRandomCount, command.Products?.Count);
 
         var result = await _mediator.Send(command);
-        return Ok(result);
+        return Accepted(result);
     }
 }

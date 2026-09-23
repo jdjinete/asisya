@@ -1,5 +1,6 @@
 using Asisya.Application.Common.Interfaces;
 using Asisya.Infrastructure.Persistence;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +39,29 @@ public static class DependencyInjection
 
         // Register IApplicationDbContext mapping to AsisyaDbContext
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<AsisyaDbContext>());
+
+        // Configure MassTransit with RabbitMQ message broker
+        services.AddMassTransit(x =>
+        {
+            x.AddConsumer<Asisya.Application.Features.Products.Consumers.BulkCreateProductsConsumer>();
+
+            x.UsingRabbitMq((context, cfg) =>
+            {
+                var host = configuration["RabbitMq:Host"] ?? "localhost";
+                var portStr = configuration["RabbitMq:Port"] ?? "5672";
+                var port = ushort.TryParse(portStr, out var p) ? p : (ushort)5672;
+                var username = configuration["RabbitMq:Username"] ?? "guest";
+                var password = configuration["RabbitMq:Password"] ?? "guest";
+
+                cfg.Host(host, port, "/", h =>
+                {
+                    h.Username(username);
+                    h.Password(password);
+                });
+
+                cfg.ConfigureEndpoints(context);
+            });
+        });
 
         return services;
     }

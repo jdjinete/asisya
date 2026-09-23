@@ -1,204 +1,84 @@
-using System.Diagnostics;
-using Asisya.Application.Common.Interfaces;
-using Asisya.Domain.Entities;
+using Asisya.Application.Features.Products.Events;
+using FluentValidation;
+using FluentValidation.Results;
+using MassTransit;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Asisya.Application.Features.Products.Commands.BulkCreateProducts;
 
 /// <summary>
 /// High-performance MediatR handler for <see cref="BulkCreateProductsCommand"/>.
 /// 
-/// Batching Strategy:
-/// 1. Transactional Execution Strategy: Uses <see cref="IApplicationDbContext.ExecuteInTransactionAsync"/>
-///    compatible with NpgsqlRetryingExecutionStrategy.
-/// 2. Chunking (1,000 items per roundtrip): Avoids reaching PostgreSQL parameter limits (65,535 max)
-///    and prevents Large Object Heap (LOH) memory allocation spikes.
-/// 3. Change Tracker Eviction: Invokes <see cref="IApplicationDbContext.ClearChangeTracker"/> after
-///    each chunk save. Without clearing, EF Core's ChangeTracker retains tracked entity snapshots,
-///    causing O(N^2) complexity on subsequent DetectChanges cycles and consuming hundreds of megabytes
-///    when inserting 100,000 records.
-/// 4. Category Integrity: Ensures core categories ('SERVIDORES' and 'CLOUD') exist in database
-///    to satisfy referential integrity constraints.
+/// Asynchronous Event-Driven Architecture:
+/// 1. Validation: Validates payload parameters before accepting the request.
+/// 2. Event Publishing: Dispatches <see cref="BatchProductsReceivedEvent"/> to RabbitMQ via <see cref="IPublishEndpoint"/>.
+/// 3. Non-Blocking HTTP Pipeline: Returns HTTP 202 Accepted immediately with correlation <see cref="BulkCreateProductsResult.BatchId"/>
+///    allowing callers to monitor progress without holding open long-lived HTTP socket connections.
+/// 4. Decoupled Processing: Execution is offloaded to <see cref="Consumers.BulkCreateProductsConsumer"/> running in background.
 /// </summary>
 public class BulkCreateProductsCommandHandler : IRequestHandler<BulkCreateProductsCommand, BulkCreateProductsResult>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IPublishEndpoint _publishEndpoint;
+    private readonly ILogger<BulkCreateProductsCommandHandler> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BulkCreateProductsCommandHandler"/> class.
     /// </summary>
-    public BulkCreateProductsCommandHandler(IApplicationDbContext _context)
+    public BulkCreateProductsCommandHandler(
+        IPublishEndpoint publishEndpoint,
+        ILogger<BulkCreateProductsCommandHandler> logger)
     {
-        this._context = _context;
+        _publishEndpoint = publishEndpoint;
+        _logger = logger;
     }
 
     /// <inheritdoc />
     public async Task<BulkCreateProductsResult> Handle(BulkCreateProductsCommand request, CancellationToken cancellationToken)
     {
-        var stopwatch = Stopwatch.StartNew();
-        var errors = new List<string>();
+        // 1. Validate request payload
+        var hasRandomCount = request.GenerateRandomCount.HasValue && request.GenerateRandomCount.Value > 0;
+        var hasProducts = request.Products != null && request.Products.Count > 0;
 
-        // Ensure baseline categories exist for foreign key compliance
-        var (servidoresId, cloudId) = await EnsureDefaultCategoriesExistAsync(cancellationToken);
-
-        int totalToProcess = 0;
-        int successfulImports = 0;
-        int failedImports = 0;
-
-        var batchSize = request.BatchSize > 0 ? request.BatchSize : 1000;
-
-        var (successCount, failCount) = await _context.ExecuteInTransactionAsync(async ct =>
+        if (!hasRandomCount && !hasProducts)
         {
-            int batchSuccess = 0;
-            int batchFail = 0;
-
-            if (request.GenerateRandomCount.HasValue && request.GenerateRandomCount.Value > 0)
+            throw new ValidationException(new[]
             {
-                totalToProcess = request.GenerateRandomCount.Value;
-                var random = new Random(42); // Deterministic seed for reproducible testing
-                var serverPrefixes = new[] { "Dell PowerEdge", "HP ProLiant", "Lenovo ThinkSystem", "Cisco UCS", "Supermicro" };
-                var cloudPrefixes = new[] { "AWS EC2 Instance", "Azure VM Standard", "GCP Compute Engine", "Kubernetes Node Pod", "Cloud Dedicated Host" };
+                new ValidationFailure("Products", "Either 'GenerateRandomCount' (greater than 0) or 'Products' collection must be provided.")
+            });
+        }
 
-                var currentChunk = new List<Product>(batchSize);
+        var totalToProcess = request.GenerateRandomCount ?? request.Products?.Count ?? 0;
+        var batchId = Guid.NewGuid();
+        var enqueuedAt = DateTime.UtcNow;
 
-                for (int i = 1; i <= totalToProcess; i++)
-                {
-                    var isCloud = (i % 2 == 0);
-                    var categoryId = isCloud ? cloudId : servidoresId;
-                    var prefix = isCloud 
-                        ? cloudPrefixes[random.Next(cloudPrefixes.Length)] 
-                        : serverPrefixes[random.Next(serverPrefixes.Length)];
+        _logger.LogInformation(
+            "Enqueueing bulk ingestion batch {BatchId} to RabbitMQ. Total items: {TotalItems}, BatchSize: {BatchSize}",
+            batchId, totalToProcess, request.BatchSize);
 
-                    var product = new Product
-                    {
-                        ProductName = $"{prefix} - Gen{random.Next(10, 16)} #{i:D6}",
-                        CategoryId = categoryId,
-                        UnitPrice = Math.Round((decimal)(random.NextDouble() * 5000 + 100), 2),
-                        UnitsInStock = (short)random.Next(0, 500),
-                        UnitsOnOrder = (short)random.Next(0, 50),
-                        ReorderLevel = 10,
-                        Discontinued = (random.Next(0, 100) < 5), // 5% discontinued
-                        QuantityPerUnit = isCloud ? "1 vCPU / 4GB RAM hourly" : "Rack 1U chassis"
-                    };
+        // 2. Publish integration event to RabbitMQ
+        var batchEvent = new BatchProductsReceivedEvent
+        {
+            BatchId = batchId,
+            EnqueuedAtUtc = enqueuedAt,
+            Products = request.Products,
+            GenerateRandomCount = request.GenerateRandomCount,
+            BatchSize = request.BatchSize > 0 ? request.BatchSize : 1000
+        };
 
-                    currentChunk.Add(product);
+        await _publishEndpoint.Publish(batchEvent, cancellationToken);
 
-                    if (currentChunk.Count >= batchSize)
-                    {
-                        await _context.Products.AddRangeAsync(currentChunk, ct);
-                        await _context.SaveChangesAsync(ct);
-                        _context.ClearChangeTracker();
-                        batchSuccess += currentChunk.Count;
-                        currentChunk.Clear();
-                    }
-                }
-
-                if (currentChunk.Count > 0)
-                {
-                    await _context.Products.AddRangeAsync(currentChunk, ct);
-                    await _context.SaveChangesAsync(ct);
-                    _context.ClearChangeTracker();
-                    batchSuccess += currentChunk.Count;
-                    currentChunk.Clear();
-                }
-            }
-            else if (request.Products != null && request.Products.Count > 0)
-            {
-                totalToProcess = request.Products.Count;
-                var currentChunk = new List<Product>(batchSize);
-
-                foreach (var item in request.Products)
-                {
-                    if (string.IsNullOrWhiteSpace(item.ProductName))
-                    {
-                        batchFail++;
-                        errors.Add("Encountered product item with empty or null ProductName.");
-                        continue;
-                    }
-
-                    var product = new Product
-                    {
-                        ProductName = item.ProductName.Trim(),
-                        CategoryId = item.CategoryId ?? servidoresId,
-                        SupplierId = item.SupplierId,
-                        UnitPrice = item.UnitPrice,
-                        UnitsInStock = item.UnitsInStock ?? 0,
-                        Discontinued = item.Discontinued,
-                        QuantityPerUnit = item.QuantityPerUnit
-                    };
-
-                    currentChunk.Add(product);
-
-                    if (currentChunk.Count >= batchSize)
-                    {
-                        await _context.Products.AddRangeAsync(currentChunk, ct);
-                        await _context.SaveChangesAsync(ct);
-                        _context.ClearChangeTracker();
-                        batchSuccess += currentChunk.Count;
-                        currentChunk.Clear();
-                    }
-                }
-
-                if (currentChunk.Count > 0)
-                {
-                    await _context.Products.AddRangeAsync(currentChunk, ct);
-                    await _context.SaveChangesAsync(ct);
-                    _context.ClearChangeTracker();
-                    batchSuccess += currentChunk.Count;
-                    currentChunk.Clear();
-                }
-            }
-
-            return (batchSuccess, batchFail);
-        }, cancellationToken);
-
-        successfulImports = successCount;
-        failedImports = failCount;
-
-        stopwatch.Stop();
-
+        // 3. Return immediate Accepted response
         return new BulkCreateProductsResult
         {
+            BatchId = batchId,
             TotalProcessed = totalToProcess,
-            SuccessfulImports = successfulImports,
-            FailedImports = failedImports,
-            ElapsedMilliseconds = stopwatch.ElapsedMilliseconds,
-            Errors = errors
+            SuccessfulImports = 0,
+            FailedImports = 0,
+            ElapsedMilliseconds = 0,
+            Status = "Accepted",
+            Message = $"Bulk product ingestion job {batchId} enqueued for asynchronous processing ({totalToProcess:N0} items).",
+            EnqueuedAtUtc = enqueuedAt
         };
-    }
-
-    private async Task<(int ServidoresId, int CloudId)> EnsureDefaultCategoriesExistAsync(CancellationToken cancellationToken)
-    {
-        var servidores = await _context.Categories
-            .FirstOrDefaultAsync(c => c.CategoryName == "SERVIDORES", cancellationToken);
-
-        if (servidores == null)
-        {
-            servidores = new Category
-            {
-                CategoryName = "SERVIDORES",
-                Description = "Dedicated on-premises enterprise rack and blade server units"
-            };
-            _context.Categories.Add(servidores);
-        }
-
-        var cloud = await _context.Categories
-            .FirstOrDefaultAsync(c => c.CategoryName == "CLOUD", cancellationToken);
-
-        if (cloud == null)
-        {
-            cloud = new Category
-            {
-                CategoryName = "CLOUD",
-                Description = "Scalable cloud instances, virtual machines, and managed cloud infrastructure"
-            };
-            _context.Categories.Add(cloud);
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
-        _context.ClearChangeTracker();
-
-        return (servidores.CategoryId, cloud.CategoryId);
     }
 }
