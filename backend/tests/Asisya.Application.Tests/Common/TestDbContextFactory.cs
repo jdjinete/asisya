@@ -1,4 +1,5 @@
 using Asisya.Infrastructure.Persistence;
+using Asisya.Infrastructure.Persistence.Interceptors;
 using Microsoft.EntityFrameworkCore;
 
 namespace Asisya.Application.Tests.Common;
@@ -26,15 +27,21 @@ public class TestAsisyaDbContext : AsisyaDbContext
 /// </summary>
 public static class TestDbContextFactory
 {
-    public static TestAsisyaDbContext Create(string? databaseName = null)
+    public static TestAsisyaDbContext Create(
+        string? databaseName = null,
+        AuditableEntitySaveChangesInterceptor? interceptor = null)
     {
         var dbName = databaseName ?? Guid.NewGuid().ToString();
 
-        var options = new DbContextOptionsBuilder<AsisyaDbContext>()
-            .UseInMemoryDatabase(databaseName: dbName)
-            .Options;
+        var builder = new DbContextOptionsBuilder<AsisyaDbContext>()
+            .UseInMemoryDatabase(databaseName: dbName);
 
-        var context = new TestAsisyaDbContext(options);
+        if (interceptor != null)
+        {
+            builder.AddInterceptors(interceptor);
+        }
+
+        var context = new TestAsisyaDbContext(builder.Options);
         context.Database.EnsureCreated();
 
         return context;
