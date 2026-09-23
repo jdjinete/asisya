@@ -44,11 +44,15 @@ export interface ProductDetailDto {
 }
 
 export interface BulkCreateProductsResult {
+  batchId?: string;
   totalProcessed: number;
-  successfulImports: number;
-  failedImports: number;
-  elapsedMilliseconds: number;
-  errors: string[];
+  successfulImports?: number;
+  failedImports?: number;
+  elapsedMilliseconds?: number;
+  status?: string;
+  message?: string;
+  enqueuedAtUtc?: string;
+  errors?: string[];
 }
 
 export interface BulkCreateProductItemDto {

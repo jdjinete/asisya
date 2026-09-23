@@ -121,23 +121,30 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClos
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)', fontWeight: 600, marginBottom: '0.5rem' }}>
                 <CheckCircle2 size={20} />
-                <span>Ingestion Successful!</span>
+                <span>{result.status === 'Accepted' ? 'Enqueued to RabbitMQ (HTTP 202 Accepted)' : 'Ingestion Completed!'}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', fontSize: '0.85rem', marginTop: '0.8rem' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.8rem' }}>
+                {result.message || 'The background worker is consuming the queue and streaming records into PostgreSQL.'}
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: result.batchId ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: '0.75rem', fontSize: '0.85rem' }}>
                 <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Processed</span>
+                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Items Enqueued</span>
                   <strong style={{ fontSize: '1rem' }}>{result.totalProcessed.toLocaleString()}</strong>
                 </div>
-                <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Committed</span>
-                  <strong style={{ fontSize: '1rem', color: 'var(--success)' }}>{result.successfulImports.toLocaleString()}</strong>
-                </div>
-                <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Execution Time</span>
-                  <strong style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                    <Clock size={14} /> {result.elapsedMilliseconds} ms
-                  </strong>
-                </div>
+                {result.batchId && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block' }}>Batch ID</span>
+                    <code style={{ fontSize: '0.75rem', color: 'var(--primary)', wordBreak: 'break-all' }}>{result.batchId}</code>
+                  </div>
+                )}
+                {result.elapsedMilliseconds !== undefined && result.elapsedMilliseconds > 0 && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block' }}>Execution Time</span>
+                    <strong style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      <Clock size={14} /> {result.elapsedMilliseconds} ms
+                    </strong>
+                  </div>
+                )}
               </div>
             </div>
           )}
