@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Asisya.Application\Asisya.Application.csproj" />
     <ProjectReference Include="..\..\src\Asisya.Infrastructure\Asisya.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Asisya.WebApi\Asisya.WebApi.csproj" />
   </ItemGroup>
 
 </Project>
