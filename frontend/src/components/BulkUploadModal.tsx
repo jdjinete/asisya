@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { productApi, BulkCreateProductsResult } from '../api/productApi';
-import { UploadCloud, CheckCircle2, Clock, X, AlertTriangle } from 'lucide-react';
+import { productApi } from '../api/productApi';
+import { UploadCloud, X, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface BulkUploadModalProps {
   isOpen: boolean;
@@ -11,48 +12,63 @@ interface BulkUploadModalProps {
 export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [count, setCount] = useState<number>(5000);
   const [batchSize, setBatchSize] = useState<number>(1000);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<BulkCreateProductsResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleExecute = async () => {
-    setLoading(true);
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
     setError(null);
-    setResult(null);
 
     try {
       const res = await productApi.bulkCreateProducts({
         generateRandomCount: count,
         batchSize
       });
-      setResult(res);
+
+      const batchId = res.batchId || 'N/A';
+      toast.success(`Bulk ingestion enqueued successfully with ID: ${batchId}`);
       onSuccess();
+      onClose();
     } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Bulk ingestion failed.');
+      console.error('Bulk ingestion submission failed:', err);
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.title ||
+        err.message ||
+        'Bulk ingestion request was rejected by server.';
+
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={isSubmitting ? undefined : onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <UploadCloud size={24} color="var(--primary)" />
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Streaming Batch Ingestion</h2>
           </div>
-          <button onClick={onClose} className="btn btn-outline btn-sm" style={{ padding: '0.3rem' }}>
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="btn btn-outline btn-sm"
+            style={{ padding: '0.3rem', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
+          >
             <X size={18} />
           </button>
         </div>
 
         <div className="modal-body">
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            Benchmark high-volume catalog ingestion using transactional streaming batches.
+            Benchmark high-volume catalog ingestion using transactional streaming batches via RabbitMQ.
             Items are categorized into <strong>'SERVIDORES'</strong> and <strong>'CLOUD'</strong>.
           </p>
 
@@ -64,8 +80,8 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClos
               <select
                 value={count}
                 onChange={(e) => setCount(Number(e.target.value))}
-                style={{ width: '100%' }}
-                disabled={loading}
+                style={{ width: '100%', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
+                disabled={isSubmitting}
               >
                 <option value={1000}>1,000 Products (Quick verification)</option>
                 <option value={5000}>5,000 Products (~1 second)</option>
@@ -85,8 +101,8 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClos
                 onChange={(e) => setBatchSize(Number(e.target.value))}
                 min={100}
                 max={5000}
-                style={{ width: '100%' }}
-                disabled={loading}
+                style={{ width: '100%', cursor: isSubmitting ? 'not-allowed' : 'text' }}
+                disabled={isSubmitting}
               />
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 Recommended: 1,000. Clears EF Core change tracker after each batch to prevent memory spikes.
@@ -110,52 +126,28 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClos
               <span>{error}</span>
             </div>
           )}
-
-          {result && (
-            <div style={{
-              marginTop: '1.5rem',
-              padding: '1.2rem',
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-              border: '1px solid rgba(16, 185, 129, 0.3)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)', fontWeight: 600, marginBottom: '0.5rem' }}>
-                <CheckCircle2 size={20} />
-                <span>{result.status === 'Accepted' ? 'Enqueued to RabbitMQ (HTTP 202 Accepted)' : 'Ingestion Completed!'}</span>
-              </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.8rem' }}>
-                {result.message || 'The background worker is consuming the queue and streaming records into PostgreSQL.'}
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: result.batchId ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: '0.75rem', fontSize: '0.85rem' }}>
-                <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Items Enqueued</span>
-                  <strong style={{ fontSize: '1rem' }}>{result.totalProcessed.toLocaleString()}</strong>
-                </div>
-                {result.batchId && (
-                  <div>
-                    <span style={{ color: 'var(--text-muted)', display: 'block' }}>Batch ID</span>
-                    <code style={{ fontSize: '0.75rem', color: 'var(--primary)', wordBreak: 'break-all' }}>{result.batchId}</code>
-                  </div>
-                )}
-                {result.elapsedMilliseconds !== undefined && result.elapsedMilliseconds > 0 && (
-                  <div>
-                    <span style={{ color: 'var(--text-muted)', display: 'block' }}>Execution Time</span>
-                    <strong style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                      <Clock size={14} /> {result.elapsedMilliseconds} ms
-                    </strong>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="modal-footer">
-          <button onClick={onClose} disabled={loading} className="btn btn-secondary">
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="btn btn-secondary"
+            style={{ cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
+          >
             Cancel
           </button>
-          <button onClick={handleExecute} disabled={loading} className="btn btn-primary">
-            {loading ? 'Processing Batch...' : 'Start Bulk Import'}
+          <button
+            onClick={handleExecute}
+            disabled={isSubmitting}
+            className="btn btn-primary"
+            style={{
+              minWidth: '150px',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting ? 0.8 : 1
+            }}
+          >
+            {isSubmitting ? 'Iniciando...' : 'Start Bulk Import'}
           </button>
         </div>
       </div>
