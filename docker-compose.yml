@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  asisya-postgres:
+    image: postgres:16-alpine
+    container_name: asisya-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: asisya_db
+      POSTGRES_USER: asisya_user
+      POSTGRES_PASSWORD: asisya_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - asisya_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U asisya_user -d asisya_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  asisya-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: asisya-api
+    restart: on-failure
+    depends_on:
+      asisya-postgres:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=asisya-postgres;Port=5432;Database=asisya_db;Username=asisya_user;Password=asisya_password
+      - Jwt__Key=AsisyaEnterpriseSuperSecretEncryptionKeyForJwt2026!MustBe256BitsMinimum
+      - Jwt__Issuer=AsisyaAuthServer
+      - Jwt__Audience=AsisyaApp
+      - Jwt__ExpirationMinutes=60
+    ports:
+      - "5000:8080"
+
+volumes:
+  asisya_pgdata:
