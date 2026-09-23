@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   asisya-postgres:
     image: postgres:16-alpine
@@ -37,6 +35,17 @@ services:
       - Jwt__ExpirationMinutes=60
     ports:
       - "5000:8080"
+
+  asisya-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: asisya-frontend
+    restart: always
+    depends_on:
+      - asisya-api
+    ports:
+      - "3001:80"
 
 volumes:
   asisya_pgdata:

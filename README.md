@@ -61,11 +61,22 @@ In the repository root, start both PostgreSQL and the .NET 8 Web API:
 docker compose up --build -d
 ```
 
+- **Frontend Web Portal (React SPA):** [http://localhost:3001](http://localhost:3001)
 - **Web API & Swagger UI:** [http://localhost:5000](http://localhost:5000)
 - **OpenAPI JSON Spec:** [http://localhost:5000/swagger/v1/swagger.json](http://localhost:5000/swagger/v1/swagger.json)
 - **PostgreSQL Database:** `localhost:5432` (`asisya_db` / `asisya_user` / `asisya_password`)
 
 *Note: Database migrations run automatically on startup.*
+
+---
+
+## 3. Frontend Architecture (React 18 + Vite + TypeScript)
+
+The frontend satisfies all specifications using standard React ecosystem patterns:
+- **Routing & Guarding (`AppRoutingModule` simulation):** Implemented in `src/router/AppRoutes.tsx` using `react-router-dom` v6 with an `AuthGuard` component that intercepts unauthenticated route access and redirects to `/login`.
+- **Reactive Forms (`Reactive Forms` simulation):** Implemented in `src/pages/ProductFormPage.tsx` using `react-hook-form`, enforcing real-time field validation (required fields, price > 0, stock >= 0) and inline error messages.
+- **Security & Interceptors:** `src/api/apiClient.ts` configures an Axios request interceptor that automatically attaches the JWT Bearer token from `localStorage` to all HTTP requests, and a response interceptor that catches `401 Unauthorized` responses to clear sessions and redirect to `/login`.
+- **High-Performance Catalog:** Server-side pagination, instant debounced search, category filtering (`SERVIDORES`, `CLOUD`), and product detail inspection with category photo rendering.
 
 ---
 
