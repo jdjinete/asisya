@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Server, LogOut, Package, Database, ClipboardList } from 'lucide-react';
+import { Server, LogOut, Package, Database, ClipboardList, Activity } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -21,7 +21,7 @@ export const Navbar: React.FC = () => {
           <span className="brand-badge">CATALOG</span>
         </Link>
 
-        <nav style={{ display: 'flex', gap: '1rem' }}>
+        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <Link to="/products" className="btn btn-outline btn-sm">
             <Package size={16} /> Products
           </Link>
@@ -35,6 +35,25 @@ export const Navbar: React.FC = () => {
             className="btn btn-outline btn-sm"
           >
             <Database size={16} /> Swagger API
+          </a>
+          <a
+            href="http://localhost:5000/health-ui"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline btn-sm"
+            title="Inspect Liveness & Readiness Probes (PostgreSQL & RabbitMQ)"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', borderColor: 'rgba(16, 185, 129, 0.4)' }}
+          >
+            <Activity size={16} color="#10b981" />
+            <span>System Status</span>
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              display: 'inline-block',
+              boxShadow: '0 0 6px #10b981'
+            }} />
           </a>
         </nav>
       </div>

@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using HealthChecks.UI.Client;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,6 +99,45 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// 6. Configure Health Checks & Observability
+var pgConnectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? "Host=localhost;Port=5432;Database=asisyadb;Username=asisya_user;Password=AsisyaPass2026!;";
+
+var rabbitHost = builder.Configuration["RabbitMq:Host"] ?? "localhost";
+var rabbitPortStr = builder.Configuration["RabbitMq:Port"] ?? "5672";
+var rabbitPort = int.TryParse(rabbitPortStr, out var rp) ? rp : 5672;
+var rabbitUser = builder.Configuration["RabbitMq:Username"] ?? "guest";
+var rabbitPass = builder.Configuration["RabbitMq:Password"] ?? "guest";
+var rabbitConnectionString = $"amqp://{rabbitUser}:{rabbitPass}@{rabbitHost}:{rabbitPort}/";
+
+builder.Services.AddHealthChecks()
+    .AddNpgSql(
+        connectionString: pgConnectionString,
+        name: "PostgreSQL Database",
+        tags: new[] { "db", "sql", "readiness" })
+    .AddRabbitMQ(
+        async sp =>
+        {
+            var factory = new RabbitMQ.Client.ConnectionFactory
+            {
+                Uri = new Uri(rabbitConnectionString)
+            };
+            return await factory.CreateConnectionAsync();
+        },
+        name: "RabbitMQ Message Broker",
+        tags: new[] { "messaging", "broker", "readiness" });
+
+var healthEndpointUri = builder.Configuration["HealthChecksUI:Endpoint"] 
+    ?? "http://127.0.0.1:8080/health";
+
+builder.Services.AddHealthChecksUI(setup =>
+{
+    setup.SetEvaluationTimeInSeconds(10);
+    setup.MaximumHistoryEntriesPerEndpoint(50);
+    setup.AddHealthCheckEndpoint("ASISYA Infrastructure Health", healthEndpointUri);
+})
+.AddInMemoryStorage();
+
 var app = builder.Build();
 
 // 6. Automatic Database Migration upon container/app startup
@@ -134,6 +175,19 @@ app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// 8. Health Check and Observability Endpoints
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = _ => true,
+    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+});
+
+app.MapHealthChecksUI(options =>
+{
+    options.UIPath = "/health-ui";
+    options.ApiPath = "/health-ui-api";
+});
 
 app.MapControllers();
 

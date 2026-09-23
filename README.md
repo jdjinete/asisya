@@ -5,14 +5,14 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.0-336791.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
 [![CI/CD](https://img.shields.io/badge/GitHub_Actions-CI%2FCD-green.svg)](https://github.com/features/actions)
-[![Tests](https://img.shields.io/badge/Tests-15%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-27%20Passed-brightgreen.svg)]()
+[![Health Checks](https://img.shields.io/badge/Health%20Checks-Healthy-brightgreen.svg)](http://localhost:5000/health-ui)
 
 Production-grade implementation of the **Finanzauto - ASISYA Developer I** technical assessment. Built following **Clean Architecture**, **CQRS (Command Query Responsibility Segregation)** with MediatR, **Spec-Driven Development (SDD)**, and a **Feature-Based Modular React SPA**.
 
 ---
 
 ## 1. Architectural Blueprint & Technical Decisions
-
 ```
 asisya/
 ├── .github/workflows/pipeline.yml    # Multi-stage CI/CD workflow (Build, Test, Lint, Docker)
@@ -21,14 +21,14 @@ asisya/
 │   ├── Dockerfile                   # Multi-stage .NET 8 Alpine build & test
 │   ├── src/
 │   │   ├── Asisya.Domain/           # Core domain entities (Zero dependencies)
-│   │   │   └── Entities/            # Category, Product, Supplier, Customer, Employee, Shipper, Order, OrderDetail
+│   │   │   └── Entities/            # Category, Product, Supplier, Customer, Employee, Shipper, Order, OrderDetail, AuditLog
 │   │   ├── Asisya.Application/      # CQRS use cases, MediatR handlers, MassTransit Events & Consumers
 │   │   │   ├── Common/              # IApplicationDbContext, PaginatedList<T>
 │   │   │   └── Features/            # Commands, Queries, Events (BatchProductsReceivedEvent), Consumers
-│   │   ├── Asisya.Infrastructure/   # EF Core DbContext, Npgsql PostgreSQL, MassTransit RabbitMQ Bus
-│   │   └── Asisya.WebApi/           # REST Controllers, JWT Authentication, Swagger OpenAPI, RFC 7807 Middleware
+│   │   ├── Asisya.Infrastructure/   # EF Core DbContext, Npgsql PostgreSQL, MassTransit RabbitMQ Bus, Interceptors
+│   │   └── Asisya.WebApi/           # REST Controllers, HealthChecks & UI, JWT Auth, Swagger, RFC 7807 Middleware
 │   └── tests/
-│       └── Asisya.Application.Tests/ # xUnit test suite (18 unit tests passing)
+│       └── Asisya.Application.Tests/ # xUnit test suite (27 unit tests passing)
 ├── frontend/
 │   ├── Dockerfile                   # Multi-stage Node.js build with Nginx Alpine runtime
 │   ├── nginx.conf                   # Reverse proxy for seamless API communication & SPA routing
@@ -74,6 +74,8 @@ docker compose up --build -d
 
 - **Frontend Web Portal (React SPA):** [http://localhost:3001](http://localhost:3001)
 - **Web API & Swagger UI:** [http://localhost:5000](http://localhost:5000)
+- **Health Checks Visual UI:** [http://localhost:5000/health-ui](http://localhost:5000/health-ui)
+- **Health Checks JSON Endpoint:** [http://localhost:5000/health](http://localhost:5000/health)
 - **RabbitMQ Management Dashboard:** [http://localhost:15672](http://localhost:15672) (User: `guest`, Password: `guest`)
 - **RabbitMQ AMQP Broker:** `localhost:5672`
 - **OpenAPI JSON Spec:** [http://localhost:5000/swagger/v1/swagger.json](http://localhost:5000/swagger/v1/swagger.json)
@@ -338,9 +340,29 @@ The batch processing worker implements enterprise fault tolerance:
 
 ---
 
+### 4.9 Cloud Observability & Health Checks (Liveness, Readiness & UI)
+In modern cloud-native environments (Kubernetes, AWS ECS, Google Cloud Run, Azure Container Apps), container orchestrators require standardized probes to manage container lifecycles and autoscaling reliably:
+
+1. **Liveness Probes (`/health`):**
+   - Validates that the .NET process is responsive and not locked in a deadlock or crashed runtime state.
+   - Orchestrators use this probe to automatically restart degraded container instances.
+2. **Readiness Probes (`/health` with dependency verification):**
+   - Deep verification for critical infrastructure:
+     - **PostgreSQL Database:** Confirms open connectivity, connection pooling availability, and query responsiveness (`AspNetCore.HealthChecks.Npgsql`).
+     - **RabbitMQ Message Broker:** Verifies socket connection and protocol negotiation with the broker (`AspNetCore.HealthChecks.RabbitMQ`).
+   - In Kubernetes, if PostgreSQL or RabbitMQ is unavailable during a cold start or network partition, traffic routing to that pod is paused immediately until healthy, preventing 500 errors from reaching end users.
+3. **HealthChecks Visual Dashboard (`/health-ui`):**
+   - Built using `AspNetCore.HealthChecks.UI` with in-memory persistence.
+   - Automatically polls `/health` every 10 seconds, presenting response time histograms, component status history, and diagnostic error traces.
+   - Accessible at [http://localhost:5000/health-ui](http://localhost:5000/health-ui).
+4. **React Frontend System Status Indicator:**
+   - The top navigation bar includes an active **System Status** badge with a live heartbeat indicator linking directly to the visual health dashboard for immediate operational visibility.
+
+---
+
 ## 5. Running Automated Tests
 
-Run the full xUnit test suite (covering unit tests for bulk batching, change tracker eviction, search filters, JWT authentication, and automatic data auditing):
+Run the full xUnit test suite (covering unit tests for bulk batching, change tracker eviction, search filters, JWT authentication, automatic data auditing, and health checks registration):
 
 ```bash
 dotnet test backend/Asisya.sln
@@ -348,7 +370,7 @@ dotnet test backend/Asisya.sln
 
 Test Results:
 ```text
-Passed!  - Failed: 0, Passed: 22, Skipped: 0, Total: 22, Duration: 573 ms
+Passed!  - Failed: 0, Passed: 27, Skipped: 0, Total: 27, Duration: 599 ms
 ```
 
 ---
