@@ -1,5 +1,7 @@
 using Asisya.Application.Common.Models;
 using Asisya.Application.Features.Products.Commands.BulkCreateProducts;
+using Asisya.Application.Features.Products.Commands.UpdateProduct;
+using Asisya.Application.Features.Products.Commands.DeleteProduct;
 using Asisya.Application.Features.Products.Queries.GetProductById;
 using Asisya.Application.Features.Products.Queries.GetProducts;
 using MediatR;
@@ -93,5 +95,56 @@ public class ProductsController : ControllerBase
 
         var result = await _mediator.Send(command);
         return Accepted(result);
+    }
+
+    /// <summary>
+    /// Updates an existing catalog product.
+    /// Secured with JWT Authorization. Captures state mutation in AuditLogs.
+    /// </summary>
+    /// <param name="id">Product identifier.</param>
+    /// <param name="command">Product updated fields.</param>
+    /// <returns>HTTP 200 OK with confirmation payload.</returns>
+    [HttpPut("{id:int}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductCommand command)
+    {
+        if (id != command.ProductId)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Mismatched Identifier",
+                Detail = $"Route parameter ID '{id}' does not match command ProductId '{command.ProductId}'.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        _logger.LogInformation("Updating product {ProductId}: {ProductName}", id, command.ProductName);
+
+        await _mediator.Send(command);
+        return Ok(new { message = $"Product {id} updated successfully.", productId = id });
+    }
+
+    /// <summary>
+    /// Deletes a catalog product.
+    /// Secured with JWT Authorization. Enforces referential integrity checks and records delete action in AuditLogs.
+    /// </summary>
+    /// <param name="id">Product identifier to delete.</param>
+    /// <returns>HTTP 200 OK with confirmation payload.</returns>
+    [HttpDelete("{id:int}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteProduct(int id)
+    {
+        _logger.LogInformation("Deleting product {ProductId}", id);
+
+        await _mediator.Send(new DeleteProductCommand(id));
+        return Ok(new { message = $"Product {id} deleted successfully.", productId = id });
     }
 }
