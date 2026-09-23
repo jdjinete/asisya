@@ -61,6 +61,7 @@ export const ProductsPage: React.FC = () => {
 
   useEffect(() => {
     fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageIndex, pageSize, categoryId, sortBy, sortOrder]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
