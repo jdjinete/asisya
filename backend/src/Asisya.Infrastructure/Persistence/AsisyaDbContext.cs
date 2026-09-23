@@ -45,6 +45,9 @@ public class AsisyaDbContext : DbContext, IApplicationDbContext
     public DbSet<OrderDetail> OrderDetails => Set<OrderDetail>();
 
     /// <inheritdoc />
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    /// <inheritdoc />
     public virtual async Task<TResult> ExecuteInTransactionAsync<TResult>(
         Func<CancellationToken, Task<TResult>> operation,
         CancellationToken cancellationToken = default)

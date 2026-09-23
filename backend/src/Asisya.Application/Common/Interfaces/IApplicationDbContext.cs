@@ -50,6 +50,11 @@ public interface IApplicationDbContext
     DbSet<OrderDetail> OrderDetails { get; }
 
     /// <summary>
+    /// Audit log historical tracking set.
+    /// </summary>
+    DbSet<AuditLog> AuditLogs { get; }
+
+    /// <summary>
     /// Asynchronously saves pending tracked entity changes to the underlying database.
     /// </summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
