@@ -1,30 +1,39 @@
-# ASISYA - Enterprise Catalog & Commerce Solution (.NET 8 + Clean Architecture)
+# ASISYA - Enterprise Catalog & Commerce Solution (.NET 8 + Clean Architecture + React)
 
 [![.NET 8](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/)
+[![React 18](https://img.shields.io/badge/React-18.2-61DAFB.svg)](https://react.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.0-336791.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
+[![CI/CD](https://img.shields.io/badge/GitHub_Actions-CI%2FCD-green.svg)](https://github.com/features/actions)
 [![Tests](https://img.shields.io/badge/Tests-15%20Passed-brightgreen.svg)]()
 
-Production-grade implementation of the **Finanzauto - ASISYA Developer I** technical assessment. Built following **Clean Architecture**, **CQRS (Command Query Responsibility Segregation)** with MediatR, and **Spec-Driven Development (SDD)**.
+Production-grade implementation of the **Finanzauto - ASISYA Developer I** technical assessment. Built following **Clean Architecture**, **CQRS (Command Query Responsibility Segregation)** with MediatR, **Spec-Driven Development (SDD)**, and a **Feature-Based Modular React SPA**.
 
 ---
 
 ## 1. Architectural Blueprint & Technical Decisions
 
 ```
-backend/
-├── Asisya.sln
-├── src/
-│   ├── Asisya.Domain/           # Enterprise entities, zero third-party dependencies
-│   │   └── Entities/            # Category, Product, Supplier, Customer, Employee, Shipper, Order, OrderDetail
-│   ├── Asisya.Application/      # Application business logic (CQRS, MediatR, FluentValidation)
-│   │   ├── Common/              # IApplicationDbContext, PaginatedList<T>
-│   │   └── Features/            # Category & Product Commands and Queries
-│   ├── Asisya.Infrastructure/   # External persistence (EF Core, Npgsql PostgreSQL, Migrations)
-│   │   └── Persistence/         # AsisyaDbContext, Configurations, B-Tree Indexes
-│   └── Asisya.WebApi/           # HTTP entry point, Controllers, JWT Auth, Swagger OpenAPI, RFC 7807 Middleware
-└── tests/
-    └── Asisya.Application.Tests/ # xUnit test suite (15 unit tests passing)
+asisya/
+├── .github/workflows/pipeline.yml    # Multi-stage CI/CD workflow (Build, Test, Lint, Docker)
+├── backend/
+│   ├── Asisya.sln
+│   ├── Dockerfile                   # Multi-stage .NET 8 Alpine build & test
+│   ├── src/
+│   │   ├── Asisya.Domain/           # Core domain entities (Zero dependencies)
+│   │   │   └── Entities/            # Category, Product, Supplier, Customer, Employee, Shipper, Order, OrderDetail
+│   │   ├── Asisya.Application/      # CQRS use cases, MediatR handlers, FluentValidation
+│   │   │   ├── Common/              # IApplicationDbContext, PaginatedList<T>
+│   │   │   └── Features/            # Category & Product Commands and Queries
+│   │   ├── Asisya.Infrastructure/   # EF Core DbContext, Npgsql PostgreSQL, Migrations, B-Tree Indexes
+│   │   └── Asisya.WebApi/           # REST Controllers, JWT Authentication, Swagger OpenAPI, RFC 7807 Middleware
+│   └── tests/
+│       └── Asisya.Application.Tests/ # xUnit test suite (15 unit tests passing)
+├── frontend/
+│   ├── Dockerfile                   # Multi-stage Node.js build with Nginx Alpine runtime
+│   ├── nginx.conf                   # Reverse proxy for seamless API communication & SPA routing
+│   └── src/                         # Modular React 18 + Vite + TypeScript application
+└── docker-compose.yml               # Orchestration for PostgreSQL, .NET Web API, and React Frontend
 ```
 
 ### Key Architectural Justifications
@@ -55,9 +64,11 @@ backend/
 
 ### Running the Entire Stack
 
-In the repository root, start both PostgreSQL and the .NET 8 Web API:
+Clone the repository and spin up all three services:
 
 ```bash
+git clone https://github.com/jdjinete/asisya.git
+cd asisya
 docker compose up --build -d
 ```
 
@@ -80,9 +91,9 @@ The frontend satisfies all specifications using standard React ecosystem pattern
 
 ---
 
-## 3. API Endpoints & Operational Verification
+## 4. API Endpoints & Operational Verification
 
-### 3.1 Authentication (JWT)
+### 4.1 Authentication (JWT)
 Obtain a signed JWT Bearer token:
 
 ```bash
@@ -111,7 +122,7 @@ TOKEN=$(curl -s -X POST http://localhost:5000/Auth/Login \
 
 ---
 
-### 3.2 Category Creation (`POST /Category`)
+### 4.2 Category Creation (`POST /Category`)
 Creates or resolves categories, enforcing business rules and uppercase normalization for core categories (`SERVIDORES`, `CLOUD`):
 
 ```bash
@@ -126,7 +137,7 @@ curl -X POST http://localhost:5000/Category \
 
 ---
 
-### 3.3 Mass Product Ingestion (`POST /Product`)
+### 4.3 Mass Product Ingestion (`POST /Product`)
 
 #### A. High-Speed Synthetic Generation (e.g. 5,000 to 100,000 items):
 ```bash
@@ -180,7 +191,7 @@ curl -X POST http://localhost:5000/Product \
 
 ---
 
-### 3.4 Query Catalog with Filters & Pagination (`GET /Products`)
+### 4.4 Query Catalog with Filters & Pagination (`GET /Products`)
 
 Retrieve paginated catalog items with optional search and category filters:
 
@@ -218,7 +229,7 @@ Response envelope:
 
 ---
 
-### 3.5 Product Detail with Category Photo (`GET /Products/{id}`)
+### 4.5 Product Detail with Category Photo (`GET /Products/{id}`)
 
 Inspect a specific product with its full inventory metrics, vendor, and embedded category picture:
 
@@ -251,7 +262,7 @@ Response:
 
 ---
 
-### 3.6 Standard Error Handling (RFC 7807 ProblemDetails)
+### 4.6 Standard Error Handling (RFC 7807 ProblemDetails)
 When requesting a non-existent item or sending invalid inputs, the API responds with RFC 7807 formatted ProblemDetails:
 
 ```bash
@@ -272,7 +283,7 @@ Content-Type: application/problem+json
 
 ---
 
-## 4. Running Automated Tests
+## 5. Running Automated Tests
 
 Run the full xUnit test suite (covering unit tests for bulk batching, change tracker eviction, search filters, and JWT authentication):
 
@@ -287,7 +298,36 @@ Passed!  - Failed: 0, Passed: 15, Skipped: 0, Total: 15, Duration: 538 ms
 
 ---
 
-## 5. Teardown
+## 6. Continuous Integration & Pipeline (GitHub Actions)
+
+The repository includes a production-ready CI/CD pipeline defined in `.github/workflows/pipeline.yml`:
+1. **Backend CI:** Restores, builds, and executes all 15 xUnit unit tests on .NET 8.
+2. **Frontend CI:** Installs dependencies, runs ESLint code quality checks, and compiles the production Vite web bundle.
+3. **Docker Validation:** Validates that both multi-stage Dockerfiles (`backend/Dockerfile` and `frontend/Dockerfile`) compile without errors prior to merge.
+
+---
+
+## 7. Technical Assumptions & Architectural Decisions (Supuestos)
+
+During the design and implementation, the following technical assumptions were made to resolve ambiguities and maximize enterprise quality:
+
+1. **Angular Terminology in a React Environment:**
+   - *Requirement Mention:* The specification prompt referred to Angular terms (`Reactive Forms` and `AppRoutingModule`).
+   - *Decision:* Per user instructions to strictly use React JS, we adopted the industry-standard equivalents in React:
+     - `AppRoutingModule` is implemented via `react-router-dom` in `src/router/AppRoutes.tsx` with an `AuthGuard` component implementing the `CanActivate` pattern.
+     - `Reactive Forms` is implemented via `react-hook-form` in `src/pages/ProductFormPage.tsx`, enforcing schema validations, error messages, and reactive state management.
+2. **Bulk Ingestion Architecture (Batching vs Messaging Broker):**
+   - *Decision:* For catalog uploads up to 100,000 items requiring synchronous HTTP response feedback (total processed, successful imports, failed items), in-process transactional batch streaming in chunks of 1,000 records with `ChangeTracker.Clear()` was chosen. This avoids the operational complexity of deploying RabbitMQ/Kafka, workers, and eventual consistency polling for this evaluation scope while executing 5,000 items in ~1.0 second.
+3. **Category Picture Binary Representation vs Public URL:**
+   - *Decision:* PostgreSQL stores pictures as `bytea` (`byte[]` in C#) for relational schema compatibility. The API serializes this data into both raw binary format and a data URI Base64 string (`data:image/jpeg;base64,...`) within `GET /Products/{id}`, allowing immediate rendering in web `<img />` tags without additional file storage dependencies.
+4. **Core Categories Normalization:**
+   - *Decision:* Predefined enterprise categories `'SERVIDORES'` and `'CLOUD'` are automatically normalized to uppercase and seeded if absent during bulk ingestion, ensuring foreign key referential integrity at all times.
+5. **JWT Token Structure and Security Defaults:**
+   - *Decision:* Signed using HMAC-SHA256 with standard claims (`sub`, `email`, `role`, `jti`, `organization`) and a 60-minute lifetime. Default evaluation accounts (`admin@asisya.com` / `Admin123!` and `operator@asisya.com` / `Operator123!`) are preconfigured for instant evaluation.
+
+---
+
+## 8. Teardown
 
 To stop and remove running containers and volumes:
 
