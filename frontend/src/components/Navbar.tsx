@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Server, LogOut, Package, Database } from 'lucide-react';
+import { Server, LogOut, Package, Database, ClipboardList } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -24,6 +24,9 @@ export const Navbar: React.FC = () => {
         <nav style={{ display: 'flex', gap: '1rem' }}>
           <Link to="/products" className="btn btn-outline btn-sm">
             <Package size={16} /> Products
+          </Link>
+          <Link to="/audit-logs" className="btn btn-outline btn-sm">
+            <ClipboardList size={16} /> Audit Logs
           </Link>
           <a
             href="http://localhost:5000"

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { ProductFormPage } from '../pages/ProductFormPage';
+import { AuditLogsPage } from '../pages/AuditLogsPage';
 import { AuthGuard } from './AuthGuard';
 
 /**
@@ -20,6 +21,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/products/new" element={<ProductFormPage />} />
         <Route path="/products/edit/:id" element={<ProductFormPage />} />
+        <Route path="/audit-logs" element={<AuditLogsPage />} />
         <Route path="/" element={<Navigate to="/products" replace />} />
       </Route>
 

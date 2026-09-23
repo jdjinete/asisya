@@ -256,6 +256,42 @@ input:focus, select:focus, textarea:focus {
   color: #34d399;
 }
 
+.badge-insert {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-update {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-delete {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.modal-content-lg {
+  max-width: 850px;
+}
+
+.json-viewer {
+  background-color: #0b1120;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #38bdf8;
+}
+
 /* Modals */
 .modal-overlay {
   position: fixed;
