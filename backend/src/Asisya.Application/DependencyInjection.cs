@@ -1,5 +1,7 @@
 using System.Reflection;
+using Asisya.Application.Common.Behaviors;
 using FluentValidation;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Asisya.Application;
@@ -18,10 +20,11 @@ public static class DependencyInjection
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        // Register MediatR handlers
+        // Register MediatR handlers and validation pipeline behavior
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(assembly);
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         });
 
         // Register FluentValidation validators

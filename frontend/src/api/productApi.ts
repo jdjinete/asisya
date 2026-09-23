@@ -77,6 +77,19 @@ export interface GetProductsParams {
   sortOrder?: string;
 }
 
+export interface UpdateProductDto {
+  productId: number;
+  productName: string;
+  categoryId?: number | null;
+  supplierId?: number | null;
+  quantityPerUnit?: string | null;
+  unitPrice?: number | null;
+  unitsInStock?: number | null;
+  unitsOnOrder?: number | null;
+  reorderLevel?: number | null;
+  discontinued?: boolean;
+}
+
 export const productApi = {
   getProducts: async (params: GetProductsParams): Promise<PaginatedList<ProductSummaryDto>> => {
     const response = await apiClient.get<PaginatedList<ProductSummaryDto>>('/Products', { params });
@@ -85,6 +98,16 @@ export const productApi = {
 
   getProductById: async (id: number): Promise<ProductDetailDto> => {
     const response = await apiClient.get<ProductDetailDto>(`/Products/${id}`);
+    return response.data;
+  },
+
+  updateProduct: async (id: number, command: UpdateProductDto): Promise<{ message: string; productId: number }> => {
+    const response = await apiClient.put<{ message: string; productId: number }>(`/Products/${id}`, command);
+    return response.data;
+  },
+
+  deleteProduct: async (id: number): Promise<{ message: string; productId: number }> => {
+    const response = await apiClient.delete<{ message: string; productId: number }>(`/Products/${id}`);
     return response.data;
   },
 

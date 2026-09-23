@@ -11,10 +11,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Edit,
+  Trash2,
+  AlertTriangle,
   RefreshCw,
   Server,
   Cloud
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const ProductsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,9 +35,27 @@ export const ProductsPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<string>('asc');
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Modals
+  // Modals & Actions
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false);
+  const [productToDelete, setProductToDelete] = useState<ProductSummaryDto | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete) return;
+    setIsDeleting(true);
+    try {
+      await productApi.deleteProduct(productToDelete.productId);
+      toast.success(`Product "${productToDelete.productName}" deleted successfully.`);
+      setProductToDelete(null);
+      fetchProducts();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || 'Failed to delete product.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -253,15 +275,32 @@ export const ProductsPage: React.FC = () => {
                       </span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={() => setSelectedProductId(p.productId)}
-                        className="btn btn-outline btn-sm"
-                        style={{ padding: '0.3rem 0.6rem' }}
-                        title="View product specifications and category picture"
-                      >
-                        <Eye size={15} />
-                        View
-                      </button>
+                      <div style={{ display: 'inline-flex', gap: '0.35rem', justifyContent: 'center' }}>
+                        <button
+                          onClick={() => setSelectedProductId(p.productId)}
+                          className="btn btn-outline btn-sm"
+                          style={{ padding: '0.3rem 0.5rem' }}
+                          title="View product specifications and category picture"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          onClick={() => navigate(`/products/edit/${p.productId}`)}
+                          className="btn btn-outline btn-sm"
+                          style={{ padding: '0.3rem 0.5rem', color: '#60a5fa', borderColor: 'rgba(96, 165, 250, 0.4)' }}
+                          title="Edit product"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => setProductToDelete(p)}
+                          className="btn btn-outline btn-sm"
+                          style={{ padding: '0.3rem 0.5rem', color: '#f87171', borderColor: 'rgba(248, 113, 113, 0.4)' }}
+                          title="Delete product"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -332,6 +371,46 @@ export const ProductsPage: React.FC = () => {
           fetchProducts();
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      {productToDelete && (
+        <div className="modal-overlay" onClick={() => !isDeleting && setProductToDelete(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <AlertTriangle size={20} color="var(--danger)" />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Confirm Product Deletion</h3>
+              </div>
+            </div>
+            <div className="modal-body">
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                Are you sure you want to delete product <strong>"{productToDelete.productName}"</strong> (ID: #{productToDelete.productId})?
+              </p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                This action cannot be undone and will record a permanent <code>DELETE</code> mutation event in the Audit Logs trail.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                className="btn btn-secondary btn-sm"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                className="btn btn-danger btn-sm"
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
