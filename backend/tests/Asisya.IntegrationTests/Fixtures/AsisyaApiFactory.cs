@@ -1,4 +1,6 @@
+using Asisya.Application.Common.Interfaces;
 using Asisya.Infrastructure.Persistence;
+using Asisya.Infrastructure.Persistence.Interceptors;
 using Asisya.WebApi.Services;
 using MassTransit;
 using Microsoft.AspNetCore.Hosting;
@@ -50,6 +52,8 @@ public class AsisyaApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseSetting("ConnectionStrings:DefaultConnection", _dbContainer.GetConnectionString());
+
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -63,6 +67,38 @@ public class AsisyaApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
         builder.ConfigureTestServices(services =>
         {
+            // Remove existing EF Core DbContext registrations
+            var descriptorsToRemove = services
+                .Where(d => d.ServiceType == typeof(DbContextOptions<AsisyaDbContext>) ||
+                            d.ServiceType == typeof(DbContextOptions) ||
+                            d.ServiceType == typeof(AsisyaDbContext) ||
+                            d.ServiceType == typeof(IApplicationDbContext))
+                .ToList();
+
+            foreach (var descriptor in descriptorsToRemove)
+            {
+                services.Remove(descriptor);
+            }
+
+            // Register AsisyaDbContext with dynamic Testcontainers PostgreSQL connection string
+            services.AddDbContext<AsisyaDbContext>((sp, options) =>
+            {
+                var interceptor = sp.GetRequiredService<AuditableEntitySaveChangesInterceptor>();
+                options.AddInterceptors(interceptor);
+
+                options.UseNpgsql(_dbContainer.GetConnectionString(), npgsqlOptions =>
+                {
+                    npgsqlOptions.MigrationsAssembly(typeof(AsisyaDbContext).Assembly.FullName);
+                    npgsqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        errorCodesToAdd: null);
+                });
+            });
+
+            // Re-bind IApplicationDbContext to the reconfigured AsisyaDbContext
+            services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<AsisyaDbContext>());
+
             // Replace external RabbitMQ transport with MassTransit InMemory test harness for test isolation
             services.AddMassTransitTestHarness();
         });
