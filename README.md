@@ -7,16 +7,16 @@
 [![MassTransit](https://img.shields.io/badge/MassTransit-8.3-orange.svg)](https://masstransit.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
 [![CI/CD](https://img.shields.io/badge/GitHub_Actions-CI%2FCD-green.svg)](https://github.com/features/actions)
-[![Tests](https://img.shields.io/badge/Tests-54%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-70%20Passed-brightgreen.svg)]()
 [![Health Checks](https://img.shields.io/badge/Health%20Checks-Healthy-brightgreen.svg)](http://localhost:5000/health-ui)
 
-Production-grade, enterprise-ready implementation of the **Finanzauto - ASISYA** technical assessment. Built following **Clean Architecture (Onion / Hexagonal)**, **CQRS (Command Query Responsibility Segregation)** with **MediatR**, **Asynchronous Event-Driven Messaging** with **RabbitMQ** and **MassTransit**, automated **EF Core Audit Interceptors**, and a modern **React 18 (TypeScript + Vite)** SPA.
+Implementación de nivel empresarial lista para producción de la prueba técnica **Finanzauto - ASISYA**. Construida siguiendo **Clean Architecture (Onion / Hexagonal)**, **CQRS (Command Query Responsibility Segregation)** con **MediatR**, **mensajería asíncrona orientada a eventos** con **RabbitMQ** y **MassTransit**, **interceptores de auditoría automatizados** con EF Core y una SPA moderna en **React 18 (TypeScript + Vite)**.
 
 ---
 
 ## 1. Ejecución Local (Docker)
 
-The entire platform—including the ASP.NET Core 8 Web API, React SPA, PostgreSQL database, and RabbitMQ message broker—is fully containerized and orchestrated with a single Docker Compose command.
+Toda la plataforma —incluyendo la Web API en ASP.NET Core 8, la SPA en React, la base de datos PostgreSQL y el broker de mensajería RabbitMQ— se encuentra completamente contenedorizada y orquestada con un único comando de Docker Compose.
 
 ### Requisitos Previos
 - [Docker Engine](https://docs.docker.com/engine/install/) (v20.10+)
@@ -212,7 +212,10 @@ Jobs del Pipeline CI/CD:
 
 ## 6. Pruebas Automatizadas
 
-El proyecto cuenta con **54 pruebas unitarias** implementadas con **xUnit**, **FluentAssertions** y un `TestDbContextFactory` en memoria.
+El proyecto cuenta con **70 pruebas automatizadas** que combinan pruebas unitarias y pruebas de integración sobre infraestructura real:
+
+- **63 Pruebas Unitarias (`Asisya.Application.Tests`):** Desarrolladas con **xUnit**, **Moq** y **FluentAssertions**, simulando el `IApplicationDbContext` y aislando la lógica de negocio de los Handlers de MediatR y validadores de FluentValidation.
+- **7 Pruebas de Integración (`Asisya.IntegrationTests`):** Orquestadas mediante **Testcontainers.PostgreSql** y `WebApplicationFactory<Program>`, levantando un contenedor efímero de PostgreSQL en Docker para aplicar migraciones reales, emitir peticiones HTTP autenticadas con JWT y verificar la persistencia y la auditoría automática.
 
 Para ejecutar la suite de pruebas localmente:
 
@@ -222,16 +225,18 @@ dotnet test backend/Asisya.sln
 
 Resultado de ejecución:
 ```text
-Passed!  - Failed: 0, Passed: 54, Skipped: 0, Total: 54, Duration: 647 ms - Asisya.Application.Tests.dll (net8.0)
+Passed!  - Failed: 0, Passed: 63, Skipped: 0, Total: 63, Duration: 841 ms - Asisya.Application.Tests.dll (net8.0)
+Passed!  - Failed: 0, Passed:  7, Skipped: 0, Total:  7, Duration: 371 ms - Asisya.IntegrationTests.dll (net8.0)
 ```
 
 Cobertura de pruebas:
-- Comandos y Consultas de Categorías (`CreateCategory`, `GetCategories`, `UpdateCategory`, `DeleteCategory` con validación de integridad referencial).
+- Comandos y Consultas de Categorías (`CreateCategory`, `GetCategories`, `UpdateCategory`, `DeleteCategory` con validación de integridad referencial `ON DELETE RESTRICT`).
 - Comandos y Consultas de Productos (`BulkCreateProducts`, `GetProducts`, `GetProductById`, `UpdateProduct`, `DeleteProduct`).
 - Eventos y Consumidores de MassTransit (`BatchProductsReceivedEvent`, `BulkCreateProductsConsumer`).
-- Interceptor de auditoría de EF Core (`AuditableEntitySaveChangesInterceptor`).
+- Interceptor de auditoría de EF Core (`AuditableEntitySaveChangesInterceptor` capturando `Insert`, `Update` y `Delete`).
 - Registro y sondas de HealthChecks (`PostgreSQL`, `RabbitMQ`).
 - Métodos de extensión (`QueryableExtensions.ToPaginatedListAsync`).
+- Pruebas de integración HTTP end-to-end contra base de datos efímera real con Testcontainers.
 
 ---
 
@@ -396,6 +401,17 @@ spec:
 ```
 
 Con este esquema, si un cliente encola 100.000 productos divididos en lotes de 1.000, los workers escalan al máximo de réplicas en segundos para liquidar la carga en paralelo, mientras la API continúa respondiendo a los usuarios con latencias mínimas.
+
+### 8.4 Distribución y Escalabilidad del Frontend (Edge CDN vs. Pods NGINX)
+La aplicación cliente en React 18 es una **SPA (Single Page Application)** compilada con Vite en archivos estáticos puros (HTML, JS, CSS y assets). No ejecuta lógica de renderizado en servidor (SSR), por lo que su modelo de escalabilidad en la nube difiere radicalmente del backend:
+
+1. **Estrategia Cloud-Native Recomendada (Edge CDN + Object Storage):**
+   - En plataformas cloud como AWS, Azure o GCP, la buena práctica consiste en alojar los artefactos estáticos en un bucket de almacenamiento de objetos (**AWS S3**, **Azure Blob Storage** o **GCS**) y distribuirlos globalmente mediante una red **CDN** (**Amazon CloudFront**, **Cloudflare CDN** o **Fastly**).
+   - **Beneficios:** Escalabilidad horizontal prácticamente infinita en los puntos de presencia (PoPs) en el borde (*Edge*), latencias de milisegundos (TTFB mínimo por caché distribuida), y **cero consumo de recursos de cómputo (vCPU/RAM)** en el clúster de Kubernetes.
+
+2. **Estrategia Contenedorizada en Kubernetes (NGINX Pods):**
+   - Si por restricciones corporativas de red o VPCs privadas se opta por desplegar el frontend dentro del clúster K8s (utilizando la imagen con NGINX Alpine generada por nuestro `Dockerfile`), un solo Pod de NGINX despacha holgadamente más de 15.000 peticiones estáticas por segundo con menos de 15 MB de RAM.
+   - En este escenario, basta con configurar una redundancia fija de **2 a 3 réplicas** en un `Deployment` estándar para garantizar alta disponibilidad (HA), sin necesidad de autoscaling dinámico (HPA), ya que el consumo de cómputo es marginal frente a la Web API o los workers de procesamiento.
 
 ---
 
