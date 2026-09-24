@@ -297,7 +297,109 @@ curl "http://localhost:5000/AuditLogs?pageIndex=1&pageSize=5" \
 
 ---
 
-## 8. Detención y Limpieza del Stack
+## 8. Escalabilidad Horizontal Cloud con Kubernetes (K8s)
+
+La arquitectura de **ASISYA Commerce & Catalog** fue diseñada siguiendo los principios de las aplicaciones nativas de la nube (*Cloud-Native / 12-Factor App*), garantizando elasticidad operativa y alta disponibilidad en plataformas administradas como **Amazon EKS**, **Azure Kubernetes Service (AKS)** o **Google Kubernetes Engine (GKE)**.
+
+### 8.1 API Stateless y Despliegue en Kubernetes
+- **Arquitectura Sin Estado (Stateless):** Al implementar autenticación criptográfica mediante **JWT Bearer**, la Web API no almacena ningún estado de sesión en memoria local (`SessionState` o caché de proceso). Cada petición HTTP porta en sus headers toda la información requerida para validar la identidad y los roles del usuario.
+- **Intercambiabilidad de Pods:** Cualquier Pod en ejecución puede atender indistintamente peticiones de cualquier cliente sin necesidad de afinidad de sesión (*sticky sessions*). Esto permite desplegar la API mediante un recurso nativo **`Deployment`** de Kubernetes detrás de un Ingress Controller (NGINX, AWS ALB o Traefik) con balanceo de carga round-robin o least-connections.
+- **Preparación Cloud con Health Checks:** Los probes nativos de Kubernetes (`livenessProbe` y `readinessProbe`) consumen directamente el endpoint `/health` expuesto en el puerto 8080/5000, garantizando que el tráfico se enrute únicamente a Pods saludables con conectividad confirmada a PostgreSQL y RabbitMQ.
+
+### 8.2 Auto-escalado Horizontal de Pods (HPA)
+Para responder dinámicamente a picos de tráfico y ráfagas de consultas al catálogo o solicitudes de ingesta, se configura un **HorizontalPodAutoscaler (HPA)** que monitorea la utilización media de recursos:
+
+```yaml
+# deploy/k8s/api-hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: asisya-api-hpa
+  namespace: asisya
+  labels:
+    app.kubernetes.io/name: asisya-api
+    app.kubernetes.io/component: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: asisya-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+```
+
+#### Funcionamiento Operativo del HPA:
+- **Línea Base Eficiente:** En condiciones normales de operación, el clúster mantiene **2 réplicas** activas asegurando redundancia de zona.
+- **Scale-Out Dinámico:** Cuando la carga de trabajo (por ejemplo, búsquedas intensivas o peticiones concurrentes de ingesta masiva) eleva el consumo promedio de CPU por encima del **70%** (calculado sobre los `resources.requests.cpu` definidos en el Pod), Kubernetes instancia réplicas adicionales progresivamente hasta un máximo de **10 Pods**.
+- **Scale-In Controlado:** Una vez estabilizada la demanda, se aplica una ventana de enfriamiento (*stabilization window*) de 300 segundos para evitar oscilaciones de escalado (*flapping*), consolidando la infraestructura y reduciendo costos de cómputo en la nube.
+
+### 8.3 Escalamiento Independiente del Worker Asíncrono
+Uno de los mayores beneficios de desacoplar la ingesta mediante **RabbitMQ** y **MassTransit** es que el procesamiento intensivo en base de datos no compite con la API web por los recursos de cómputo:
+
+1. **Separación de Responsabilidades:**
+   - La **Web API** se encarga únicamente de autenticar, validar y publicar el evento `BatchProductsReceivedEvent` en RabbitMQ (operación de < 15 ms).
+   - El **Worker Consumidor** (`BulkCreateProductsConsumer`) se ejecuta en un `Deployment` independiente dedicado exclusivamente a desagotar la cola y persistir los lotes en PostgreSQL.
+
+2. **Auto-escalado Basado en Eventos (KEDA):**
+   - El Deployment de workers no necesita escalar por CPU, sino por la **profundidad de la cola** de RabbitMQ (`QueueLength`).
+   - Integrando **KEDA (Kubernetes Event-Driven Autoscaling)** con el trigger `rabbitmq`, el número de pods de workers escala automáticamente de 1 a 10 réplicas según la cantidad de mensajes acumulados en la cola `BulkCreateProducts`:
+
+```yaml
+# deploy/k8s/worker-scaledobject.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: asisya-worker-scaler
+  namespace: asisya
+spec:
+  scaleTargetRef:
+    name: asisya-worker-deployment
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  cooldownPeriod: 60
+  pollingInterval: 10
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: BulkCreateProducts
+        mode: QueueLength
+        value: "500" # Agrega 1 réplica de worker por cada 500 lotes pendientes
+      authenticationRef:
+        name: rabbitmq-keda-auth
+```
+
+Con este esquema, si un cliente encola 100.000 productos divididos en lotes de 1.000, los workers escalan al máximo de réplicas en segundos para liquidar la carga en paralelo, mientras la API continúa respondiendo a los usuarios con latencias mínimas.
+
+---
+
+## 9. Detención y Limpieza del Stack
 
 Para detener y eliminar los contenedores, redes y volúmenes asociados:
 
