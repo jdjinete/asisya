@@ -19,6 +19,7 @@ RUN dotnet restore Asisya.sln
 COPY . .
 
 # Execute unit test suite to enforce quality gate prior to artifact publishing
+RUN dotnet restore tests/Asisya.Application.Tests/Asisya.Application.Tests.csproj --force
 RUN dotnet test tests/Asisya.Application.Tests/Asisya.Application.Tests.csproj -c Release --no-restore
 
 # Publish the Web API
