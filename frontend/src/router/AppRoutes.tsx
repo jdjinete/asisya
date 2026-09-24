@@ -5,6 +5,7 @@ import { ProductsPage } from '../pages/ProductsPage';
 import { ProductFormPage } from '../pages/ProductFormPage';
 import { AuditLogsPage } from '../pages/AuditLogsPage';
 import { AuthGuard } from './AuthGuard';
+import { AdminGuard } from './AdminGuard';
 
 /**
  * Main application routing module (simulates Angular AppRoutingModule in React).
@@ -19,10 +20,14 @@ export const AppRoutes: React.FC = () => {
       {/* Private Guarded Routes (Protected by AuthGuard) */}
       <Route element={<AuthGuard />}>
         <Route path="/products" element={<ProductsPage />} />
-        <Route path="/products/new" element={<ProductFormPage />} />
-        <Route path="/products/edit/:id" element={<ProductFormPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
         <Route path="/" element={<Navigate to="/products" replace />} />
+
+        {/* Administrator-only Routes (Protected by AdminGuard) */}
+        <Route element={<AdminGuard />}>
+          <Route path="/products/new" element={<ProductFormPage />} />
+          <Route path="/products/edit/:id" element={<ProductFormPage />} />
+        </Route>
       </Route>
 
       {/* Fallback Catch-all Route */}

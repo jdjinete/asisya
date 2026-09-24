@@ -22,9 +22,12 @@ import {
   Tags
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export const ProductsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'administrator';
 
   // State
   const [products, setProducts] = useState<ProductSummaryDto[]>([]);
@@ -139,20 +142,24 @@ export const ProductsPage: React.FC = () => {
               <Tags size={18} />
               Categories
             </button>
-            <button
-              onClick={() => setIsBulkModalOpen(true)}
-              className="btn btn-secondary"
-            >
-              <UploadCloud size={18} />
-              Bulk Streaming Ingest
-            </button>
-            <button
-              onClick={() => navigate('/products/new')}
-              className="btn btn-primary"
-            >
-              <Plus size={18} />
-              New Product
-            </button>
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => setIsBulkModalOpen(true)}
+                  className="btn btn-secondary"
+                >
+                  <UploadCloud size={18} />
+                  Bulk Streaming Ingest
+                </button>
+                <button
+                  onClick={() => navigate('/products/new')}
+                  className="btn btn-primary"
+                >
+                  <Plus size={18} />
+                  New Product
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -325,20 +332,24 @@ export const ProductsPage: React.FC = () => {
                           >
                             <Eye size={16} />
                           </button>
-                          <button
-                            onClick={() => navigate(`/products/edit/${p.productId}`)}
-                            className="btn-icon"
-                            title="Edit Product"
-                          >
-                            <Edit size={16} color="var(--primary)" />
-                          </button>
-                          <button
-                            onClick={() => setProductToDelete(p)}
-                            className="btn-icon"
-                            title="Delete Product"
-                          >
-                            <Trash2 size={16} color="var(--danger)" />
-                          </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                onClick={() => navigate(`/products/edit/${p.productId}`)}
+                                className="btn-icon"
+                                title="Edit Product"
+                              >
+                                <Edit size={16} color="var(--primary)" />
+                              </button>
+                              <button
+                                onClick={() => setProductToDelete(p)}
+                                className="btn-icon"
+                                title="Delete Product"
+                              >
+                                <Trash2 size={16} color="var(--danger)" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

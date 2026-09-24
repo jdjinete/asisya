@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { categoryApi, CategoryDto } from '../api/categoryApi';
-import { Tags, X, Plus, Edit2, Trash2, AlertCircle, CheckCircle, Package } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Tags, X, Plus, Edit, Trash2, AlertCircle, CheckCircle, Package } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface CategoryManagementModalProps {
@@ -14,6 +15,9 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
   onClose,
   onCategoriesChanged
 }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'administrator';
+
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -145,83 +149,85 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Create / Edit Form Card */}
-          <div className="card" style={{ padding: '1rem', backgroundColor: 'var(--surface-color)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {editingCategory ? <Edit2 size={16} color="var(--primary)" /> : <Plus size={16} color="var(--primary)" />}
-                {editingCategory ? `Edit Category: ${editingCategory.categoryName}` : 'Add New Category'}
-              </h3>
-              {editingCategory && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="btn btn-outline btn-sm"
-                  style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                >
-                  Cancel Edit
-                </button>
+          {/* Create / Edit Form Card - Admin Only */}
+          {isAdmin && (
+            <div className="card" style={{ padding: '1rem', backgroundColor: 'var(--surface-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {editingCategory ? <Edit size={16} color="var(--primary)" /> : <Plus size={16} color="var(--primary)" />}
+                  {editingCategory ? `Edit Category: ${editingCategory.categoryName}` : 'Add New Category'}
+                </h3>
+                {editingCategory && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="btn btn-outline btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+
+              {formError && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.6rem 0.8rem',
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: '#f87171',
+                  fontSize: '0.82rem',
+                  marginBottom: '0.75rem'
+                }}>
+                  <AlertCircle size={16} />
+                  <span>{formError}</span>
+                </div>
               )}
+
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.25rem' }}>
+                    Category Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. STORAGE, NETWORKING"
+                    value={categoryName}
+                    onChange={(e) => setCategoryName(e.target.value)}
+                    maxLength={50}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.25rem' }}>
+                    Description (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Brief description of the catalog segment..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    maxLength={500}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={submitting}
+                  >
+                    {editingCategory ? <CheckCircle size={16} /> : <Plus size={16} />}
+                    {submitting ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Category'}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            {formError && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.6rem 0.8rem',
-                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                borderRadius: 'var(--radius-sm)',
-                color: '#f87171',
-                fontSize: '0.82rem',
-                marginBottom: '0.75rem'
-              }}>
-                <AlertCircle size={16} />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.25rem' }}>
-                  Category Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. STORAGE, NETWORKING"
-                  value={categoryName}
-                  onChange={(e) => setCategoryName(e.target.value)}
-                  maxLength={50}
-                  style={{ width: '100%' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.25rem' }}>
-                  Description (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Brief description of the catalog segment..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  maxLength={500}
-                  style={{ width: '100%' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                <button
-                  type="submit"
-                  className="btn btn-primary btn-sm"
-                  disabled={submitting}
-                >
-                  {editingCategory ? <CheckCircle size={16} /> : <Plus size={16} />}
-                  {submitting ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Category'}
-                </button>
-              </div>
-            </form>
-          </div>
+          )}
 
           {/* Existing Categories Table */}
           <div>
@@ -242,10 +248,10 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
                 <table className="data-table" style={{ width: '100%', fontSize: '0.85rem' }}>
                   <thead>
                     <tr>
-                      <th style={{ width: '30%' }}>Name</th>
-                      <th style={{ width: '40%' }}>Description</th>
+                      <th style={{ width: isAdmin ? '30%' : '35%' }}>Name</th>
+                      <th style={{ width: isAdmin ? '40%' : '50%' }}>Description</th>
                       <th style={{ width: '15%', textAlign: 'center' }}>Products</th>
-                      <th style={{ width: '15%', textAlign: 'right' }}>Actions</th>
+                      {isAdmin && <th style={{ width: '15%', textAlign: 'right' }}>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -275,34 +281,31 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
                             {cat.productCount}
                           </span>
                         </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
-                            <button
-                              onClick={() => handleStartEdit(cat)}
-                              className="btn-icon"
-                              title="Edit Category"
-                              style={{ padding: '0.25rem' }}
-                            >
-                              <Edit2 size={15} color="var(--primary)" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(cat)}
-                              className="btn-icon"
-                              title={
-                                cat.productCount > 0
-                                  ? 'Cannot delete: category has assigned products'
-                                  : 'Delete Category'
-                              }
-                              style={{
-                                padding: '0.25rem',
-                                opacity: cat.productCount > 0 ? 0.4 : 1,
-                                cursor: cat.productCount > 0 ? 'not-allowed' : 'pointer'
-                              }}
-                            >
-                              <Trash2 size={15} color="var(--danger)" />
-                            </button>
-                          </div>
-                        </td>
+                        {isAdmin && (
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => handleStartEdit(cat)}
+                                className="btn-icon"
+                                title="Edit Category"
+                              >
+                                <Edit size={16} color="var(--primary)" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(cat)}
+                                className="btn-icon"
+                                title={
+                                  cat.productCount > 0
+                                    ? 'Cannot delete: category has assigned products'
+                                    : 'Delete Category'
+                                }
+                                disabled={cat.productCount > 0}
+                              >
+                                <Trash2 size={16} color="var(--danger)" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
