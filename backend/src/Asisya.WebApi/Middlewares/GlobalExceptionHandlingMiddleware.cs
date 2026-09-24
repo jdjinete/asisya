@@ -75,6 +75,14 @@ public class GlobalExceptionHandlingMiddleware
                 problemDetails.Detail = notFoundException.Message;
                 break;
 
+            case InvalidOperationException invalidOpException:
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                problemDetails.Status = (int)HttpStatusCode.BadRequest;
+                problemDetails.Title = "Invalid Operation";
+                problemDetails.Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1";
+                problemDetails.Detail = invalidOpException.Message;
+                break;
+
             case UnauthorizedAccessException unauthorizedException:
                 context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
                 problemDetails.Status = (int)HttpStatusCode.Unauthorized;

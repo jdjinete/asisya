@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { productApi } from '../api/productApi';
+import { categoryApi, CategoryDto } from '../api/categoryApi';
 import { Navbar } from '../components/Navbar';
-import { Box, Save, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { CategoryManagementModal } from '../components/CategoryManagementModal';
+import { Box, Save, ArrowLeft, AlertCircle, Settings, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ProductFormData {
@@ -27,22 +29,41 @@ export const ProductFormPage: React.FC = () => {
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(isEditMode);
+  const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors }
   } = useForm<ProductFormData>({
     defaultValues: {
       productName: '',
-      categoryId: 1, // Default to SERVIDORES
+      categoryId: 1,
       unitPrice: 199.99,
       unitsInStock: 20,
       quantityPerUnit: '1 Unit standard',
       discontinued: false
     }
   });
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const data = await categoryApi.getCategories();
+      setCategories(data);
+      if (data.length > 0 && !isEditMode) {
+        setValue('categoryId', data[0].categoryId);
+      }
+    } catch (err) {
+      console.error('Failed to load categories', err);
+    }
+  }, [isEditMode, setValue]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   useEffect(() => {
     if (isEditMode && id) {
@@ -84,7 +105,7 @@ export const ProductFormPage: React.FC = () => {
           quantityPerUnit: data.quantityPerUnit,
           discontinued: data.discontinued
         });
-        toast.success(`Product #${id} updated successfully!`);
+        toast.success(`Product "${data.productName}" updated successfully.`);
       } else {
         await productApi.bulkCreateProducts({
           products: [
@@ -99,15 +120,14 @@ export const ProductFormPage: React.FC = () => {
           ],
           batchSize: 1
         });
-        toast.success('Product created successfully!');
+        toast.success(`Product "${data.productName}" created successfully.`);
       }
 
       navigate('/products');
     } catch (err: any) {
       console.error(err);
-      const detail = err.response?.data?.detail || 'Failed to save product.';
-      setServerError(detail);
-      toast.error(detail);
+      setServerError(err.response?.data?.detail || 'Failed to save product.');
+      toast.error(err.response?.data?.detail || 'Failed to save product.');
     } finally {
       setSubmitting(false);
     }
@@ -131,10 +151,12 @@ export const ProductFormPage: React.FC = () => {
               <Box size={24} color="var(--primary)" />
               <div>
                 <h1 style={{ fontSize: '1.3rem', fontWeight: 700 }}>
-                  {isEditMode ? `Edit Catalog Product #${id}` : 'New Catalog Product'}
+                  {isEditMode ? 'Edit Catalog Product' : 'New Catalog Product'}
                 </h1>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                  {isEditMode ? 'Modify catalog specifications, pricing, and status' : 'Register commercial hardware or cloud subscription'}
+                  {isEditMode
+                    ? `Update hardware attributes for product ID #${id}`
+                    : 'Register commercial hardware or cloud subscription'}
                 </p>
               </div>
             </div>
@@ -189,15 +211,33 @@ export const ProductFormPage: React.FC = () => {
                   {/* Category & Unit Price in 2 Columns */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.4rem' }}>
-                        Category *
-                      </label>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                          Category *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsCategoryModalOpen(true)}
+                          className="btn btn-outline btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          title="Manage categories"
+                        >
+                          <Settings size={12} /> Manage
+                        </button>
+                      </div>
                       <select
                         style={{ width: '100%' }}
                         {...register('categoryId', { required: 'Please select a valid category.' })}
                       >
-                        <option value={1}>SERVIDORES (Physical Hardware)</option>
-                        <option value={2}>CLOUD (Virtual Infrastructure)</option>
+                        {categories.length === 0 ? (
+                          <option value="">Loading categories...</option>
+                        ) : (
+                          categories.map((cat) => (
+                            <option key={cat.categoryId} value={cat.categoryId}>
+                              {cat.categoryName} {cat.description ? `(${cat.description})` : ''}
+                            </option>
+                          ))
+                        )}
                       </select>
                       {errors.categoryId && (
                         <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.3rem', display: 'block' }}>
@@ -305,6 +345,12 @@ export const ProductFormPage: React.FC = () => {
           </div>
         </div>
       </main>
+
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onCategoriesChanged={loadCategories}
+      />
     </div>
   );
 };
