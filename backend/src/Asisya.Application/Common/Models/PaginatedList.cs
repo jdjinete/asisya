@@ -45,12 +45,13 @@ public class PaginatedList<T>
     /// <summary>
     /// Initializes a new instance of the <see cref="PaginatedList{T}"/> class.
     /// </summary>
-    public PaginatedList(IReadOnlyList<T> items, int count, int pageIndex, int pageSize)
+    [System.Text.Json.Serialization.JsonConstructor]
+    public PaginatedList(IReadOnlyList<T> items, int totalItems, int pageIndex, int pageSize)
     {
         PageIndex = pageIndex;
         PageSize = pageSize;
-        TotalItems = count;
-        TotalPages = (int)Math.Ceiling(count / (double)pageSize);
+        TotalItems = totalItems;
+        TotalPages = pageSize > 0 ? (int)Math.Ceiling(totalItems / (double)pageSize) : 0;
         Items = items;
     }
 }

@@ -10,6 +10,7 @@ COPY src/Asisya.Application/Asisya.Application.csproj src/Asisya.Application/
 COPY src/Asisya.Infrastructure/Asisya.Infrastructure.csproj src/Asisya.Infrastructure/
 COPY src/Asisya.WebApi/Asisya.WebApi.csproj src/Asisya.WebApi/
 COPY tests/Asisya.Application.Tests/Asisya.Application.Tests.csproj tests/Asisya.Application.Tests/
+COPY tests/Asisya.IntegrationTests/Asisya.IntegrationTests.csproj tests/Asisya.IntegrationTests/
 
 # Restore packages
 RUN dotnet restore Asisya.sln

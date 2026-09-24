@@ -31,11 +31,13 @@ public class ProductsController : ControllerBase
 
     /// <summary>
     /// Retrieves a paginated, filtered, and sorted list of catalog products.
+    /// Publicly accessible to support open catalog browsing, search engine indexing, and storefront discovery.
     /// Supports fuzzy text search, category filtering, and price bounds.
     /// </summary>
     /// <param name="query">Pagination and filter parameters.</param>
     /// <returns>A paginated list of product summaries.</returns>
     [HttpGet]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(PaginatedList<ProductSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetProducts([FromQuery] GetProductsQuery query)
     {
@@ -48,10 +50,12 @@ public class ProductsController : ControllerBase
 
     /// <summary>
     /// Retrieves detailed information for a single product, including its category picture data.
+    /// Publicly accessible for unauthenticated product detail view.
     /// </summary>
     /// <param name="id">The unique product identifier.</param>
     /// <returns>Product details including category picture.</returns>
     [HttpGet("{id:int}")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(ProductDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProductById(int id)
