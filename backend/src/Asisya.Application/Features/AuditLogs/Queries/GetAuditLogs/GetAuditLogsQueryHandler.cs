@@ -1,3 +1,4 @@
+using Asisya.Application.Common.Extensions;
 using Asisya.Application.Common.Interfaces;
 using Asisya.Application.Common.Models;
 using MediatR;
@@ -53,6 +54,6 @@ public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, Pagin
             a.PrimaryKey
         ));
 
-        return await PaginatedList<AuditLogDto>.CreateAsync(projectedQuery, pageIndex, pageSize, cancellationToken);
+        return await projectedQuery.ToPaginatedListAsync(pageIndex, pageSize, cancellationToken);
     }
 }

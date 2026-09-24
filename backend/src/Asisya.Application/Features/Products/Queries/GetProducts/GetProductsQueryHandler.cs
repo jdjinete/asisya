@@ -1,3 +1,4 @@
+using Asisya.Application.Common.Extensions;
 using Asisya.Application.Common.Interfaces;
 using Asisya.Application.Common.Models;
 using MediatR;
@@ -90,6 +91,6 @@ public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, Paginat
             QuantityPerUnit = p.QuantityPerUnit
         });
 
-        return await PaginatedList<ProductSummaryDto>.CreateAsync(projected, pageIndex, pageSize, cancellationToken);
+        return await projected.ToPaginatedListAsync(pageIndex, pageSize, cancellationToken);
     }
 }

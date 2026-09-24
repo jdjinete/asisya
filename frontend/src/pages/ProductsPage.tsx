@@ -13,11 +13,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Edit,
+  Trash2,
+  AlertTriangle,
   RefreshCw,
   Server,
   Cloud,
   Tags
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const ProductsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,10 +39,28 @@ export const ProductsPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<string>('asc');
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Modals
+  // Modals & Actions
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
+  const [productToDelete, setProductToDelete] = useState<ProductSummaryDto | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete) return;
+    setIsDeleting(true);
+    try {
+      await productApi.deleteProduct(productToDelete.productId);
+      toast.success(`Product "${productToDelete.productName}" deleted successfully.`);
+      setProductToDelete(null);
+      fetchProducts();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || 'Failed to delete product.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -202,146 +224,170 @@ export const ProductsPage: React.FC = () => {
                 <option value="name-desc">Product Name (Z - A)</option>
                 <option value="price-asc">Price (Low to High)</option>
                 <option value="price-desc">Price (High to Low)</option>
-                <option value="stock-desc">Stock (Highest First)</option>
+                <option value="stock-asc">Stock (Low to High)</option>
+                <option value="stock-desc">Stock (High to Low)</option>
               </select>
             </div>
 
-            {/* Refresh button */}
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {/* Refresh Button */}
+            <div>
               <button
                 type="button"
-                onClick={fetchProducts}
-                className="btn btn-outline"
-                style={{ height: '40px', width: '100%', justifyContent: 'center' }}
-                title="Refresh table"
+                onClick={() => fetchProducts()}
+                className="btn btn-secondary"
+                style={{ width: '100%' }}
+                disabled={loading}
               >
-                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={16} className={loading ? 'spin' : ''} />
                 Refresh
               </button>
             </div>
           </div>
         </div>
 
-        {/* Product Table */}
-        <div className="table-responsive">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Product Name</th>
-                <th>Category</th>
-                <th>Packaging</th>
-                <th style={{ textAlign: 'right' }}>Unit Price</th>
-                <th style={{ textAlign: 'right' }}>Stock</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && products.length === 0 ? (
+        {/* Data Table */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                    Loading products from database...
-                  </td>
+                  <th style={{ width: '80px' }}>ID</th>
+                  <th>Product Name</th>
+                  <th>Category</th>
+                  <th>Unit Price</th>
+                  <th>Stock</th>
+                  <th>Packaging</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
-              ) : products.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                    No products matched your search criteria.
-                  </td>
-                </tr>
-              ) : (
-                products.map((p) => (
-                  <tr key={p.productId}>
-                    <td style={{ color: 'var(--text-muted)' }}>#{p.productId}</td>
-                    <td style={{ fontWeight: 600 }}>{p.productName}</td>
-                    <td>
-                      {p.categoryName === 'SERVIDORES' ? (
-                        <span className="badge badge-servidores" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <Server size={12} /> {p.categoryName}
-                        </span>
-                      ) : p.categoryName === 'CLOUD' ? (
-                        <span className="badge badge-cloud" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <Cloud size={12} /> {p.categoryName}
-                        </span>
-                      ) : (
-                        <span className="badge" style={{ backgroundColor: 'rgba(148, 163, 184, 0.2)', color: 'var(--text-secondary)' }}>
-                          {p.categoryName || 'General'}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{p.quantityPerUnit || '-'}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--success)' }}>
-                      ${p.unitPrice?.toFixed(2) || '0.00'}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>{p.unitsInStock ?? 0}</td>
-                    <td>
-                      <span className={`badge ${p.discontinued ? 'badge-discontinued' : 'badge-active'}`}>
-                        {p.discontinued ? 'Discontinued' : 'Active'}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={() => setSelectedProductId(p.productId)}
-                        className="btn btn-outline btn-sm"
-                        style={{ padding: '0.3rem 0.6rem' }}
-                        title="View product specifications and category picture"
-                      >
-                        <Eye size={15} />
-                        View
-                      </button>
+              </thead>
+              <tbody>
+                {loading && products.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                      Loading catalog from PostgreSQL...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Server-Side Pagination Bar */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          marginTop: '1.5rem',
-          padding: '0.5rem 0'
-        }}>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            Page <strong>{pageIndex}</strong> of <strong>{totalPages}</strong> ({totalItems.toLocaleString()} total items)
+                ) : products.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                      No products found matching the criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  products.map((p) => (
+                    <tr key={p.productId}>
+                      <td style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                        #{p.productId}
+                      </td>
+                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {p.productName}
+                      </td>
+                      <td>
+                        <span className="badge" style={{
+                          backgroundColor: p.categoryName === 'CLOUD' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                          color: p.categoryName === 'CLOUD' ? '#60a5fa' : '#34d399',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
+                        }}>
+                          {p.categoryName === 'CLOUD' ? <Cloud size={12} /> : <Server size={12} />}
+                          {p.categoryName || 'Unassigned'}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        ${p.unitPrice?.toFixed(2) ?? '0.00'}
+                      </td>
+                      <td>
+                        <span style={{
+                          color: (p.unitsInStock ?? 0) <= 5 ? 'var(--danger)' : 'inherit',
+                          fontWeight: (p.unitsInStock ?? 0) <= 5 ? 700 : 'normal'
+                        }}>
+                          {p.unitsInStock ?? 0} units
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        {p.quantityPerUnit || 'N/A'}
+                      </td>
+                      <td>
+                        {p.discontinued ? (
+                          <span className="badge badge-danger">Discontinued</span>
+                        ) : (
+                          <span className="badge badge-success">Active</span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => setSelectedProductId(p.productId)}
+                            className="btn-icon"
+                            title="Inspect Product & Category Details"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => navigate(`/products/edit/${p.productId}`)}
+                            className="btn-icon"
+                            title="Edit Product"
+                          >
+                            <Edit size={16} color="var(--primary)" />
+                          </button>
+                          <button
+                            onClick={() => setProductToDelete(p)}
+                            className="btn-icon"
+                            title="Delete Product"
+                          >
+                            <Trash2 size={16} color="var(--danger)" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPageIndex(1);
-              }}
-              style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-            >
-              <option value={10}>10 per page</option>
-              <option value={25}>25 per page</option>
-              <option value={50}>50 per page</option>
-              <option value={100}>100 per page</option>
-            </select>
+          {/* Pagination Controls */}
+          <div className="pagination">
+            <div className="pagination-info">
+              Showing page <strong>{pageIndex}</strong> of <strong>{totalPages}</strong> ({totalItems.toLocaleString()} total items)
+            </div>
 
-            <button
-              onClick={() => setPageIndex((p) => Math.max(1, p - 1))}
-              disabled={pageIndex <= 1 || loading}
-              className="btn btn-outline btn-sm"
-            >
-              <ChevronLeft size={16} /> Prev
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Per page:</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPageIndex(1);
+                }}
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
 
-            <button
-              onClick={() => setPageIndex((p) => Math.min(totalPages, p + 1))}
-              disabled={pageIndex >= totalPages || loading}
-              className="btn btn-outline btn-sm"
-            >
-              Next <ChevronRight size={16} />
-            </button>
+            <div className="pagination-controls">
+              <button
+                onClick={() => setPageIndex((p) => Math.max(1, p - 1))}
+                disabled={pageIndex <= 1 || loading}
+                className="btn btn-outline btn-sm"
+              >
+                <ChevronLeft size={16} /> Prev
+              </button>
+
+              <button
+                onClick={() => setPageIndex((p) => Math.min(totalPages, p + 1))}
+                disabled={pageIndex >= totalPages || loading}
+                className="btn btn-outline btn-sm"
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -360,6 +406,46 @@ export const ProductsPage: React.FC = () => {
           fetchProducts();
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      {productToDelete && (
+        <div className="modal-overlay" onClick={() => !isDeleting && setProductToDelete(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <AlertTriangle size={20} color="var(--danger)" />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Confirm Product Deletion</h3>
+              </div>
+            </div>
+            <div className="modal-body">
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                Are you sure you want to delete product <strong>"{productToDelete.productName}"</strong> (ID: #{productToDelete.productId})?
+              </p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                This action cannot be undone and will record a permanent <code>DELETE</code> mutation event in the Audit Logs trail.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                className="btn btn-secondary btn-sm"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                className="btn btn-danger btn-sm"
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Category Management Modal */}
       <CategoryManagementModal
