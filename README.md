@@ -87,6 +87,31 @@ Para evaluar inmediatamente el sistema protegido por roles y autenticación:
     └───────────────────────────────────┘   └────────────────────────────────┘
 ```
 
+### Mapa de Estructura de Directorios
+
+```text
+asisya/
+├── .github/workflows/pipeline.yml    # Pipeline CI/CD multi-etapa (Build, Test, Lint, Docker)
+├── backend/
+│   ├── Asisya.sln
+│   ├── Dockerfile                   # Build multi-etapa .NET 8 Alpine y ejecución de pruebas
+│   ├── src/
+│   │   ├── Asisya.Domain/           # Entidades core del dominio (Cero dependencias)
+│   │   │   └── Entities/            # Category, Product, Supplier, Customer, Employee, Shipper, Order, OrderDetail, AuditLog
+│   │   ├── Asisya.Application/      # Casos de uso CQRS, handlers MediatR, Eventos MassTransit y Consumidores
+│   │   │   ├── Common/              # IApplicationDbContext, PaginatedList<T>
+│   │   │   └── Features/            # Comandos, Consultas, Eventos (BatchProductsReceivedEvent), Consumidores
+│   │   ├── Asisya.Infrastructure/   # DbContext EF Core, Npgsql PostgreSQL, Bus MassTransit RabbitMQ, Interceptores
+│   │   └── Asisya.WebApi/           # Controladores REST, HealthChecks & UI, Auth JWT, Swagger, Middleware RFC 7807
+│   └── tests/
+│       └── Asisya.Application.Tests/ # Suite de pruebas xUnit (54 pruebas unitarias exitosas)
+├── frontend/
+│   ├── Dockerfile                   # Build multi-etapa Node.js con runtime Nginx Alpine
+│   ├── nginx.conf                   # Proxy inverso para comunicación API transparente & enrutamiento SPA
+│   └── src/                         # Aplicación modular React 18 + Vite + TypeScript
+└── docker-compose.yml               # Orquestación para PostgreSQL, RabbitMQ, .NET Web API y Frontend React
+```
+
 ### 2.1 Principios de Clean Architecture (Separación Estricta)
 1. **Asisya.Domain (Núcleo):** Contiene las entidades del negocio (`Product`, `Category`, `Supplier`, `AuditLog`, `Order`, etc.) sin ninguna dependencia de frameworks, bases de datos o librerías externas.
 2. **Asisya.Application (Casos de Uso):** Orquestación pura con CQRS (**MediatR**). Modela comandos y consultas desacopladas. `PaginatedList<T>` se implementó como un **POCO puro** desacoplado de Entity Framework Core; la materialización asíncrona de datos reside en el método de extensión `QueryableExtensions.ToPaginatedListAsync`.
