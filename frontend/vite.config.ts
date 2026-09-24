@@ -22,6 +22,10 @@ export default defineConfig({
       '/Products': {
         target: process.env.VITE_API_URL || 'http://localhost:5000',
         changeOrigin: true
+      },
+      '/AuditLogs': {
+        target: process.env.VITE_API_URL || 'http://localhost:5000',
+        changeOrigin: true
       }
     }
   }
