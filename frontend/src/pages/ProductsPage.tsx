@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { productApi, ProductSummaryDto } from '../api/productApi';
+import { categoryApi, CategoryDto } from '../api/categoryApi';
 import { Navbar } from '../components/Navbar';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
+import { CategoryManagementModal } from '../components/CategoryManagementModal';
 import {
   Search,
   Plus,
@@ -13,7 +15,8 @@ import {
   Eye,
   RefreshCw,
   Server,
-  Cloud
+  Cloud,
+  Tags
 } from 'lucide-react';
 
 export const ProductsPage: React.FC = () => {
@@ -21,6 +24,7 @@ export const ProductsPage: React.FC = () => {
 
   // State
   const [products, setProducts] = useState<ProductSummaryDto[]>([]);
+  const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [pageIndex, setPageIndex] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [totalItems, setTotalItems] = useState<number>(0);
@@ -34,6 +38,7 @@ export const ProductsPage: React.FC = () => {
   // Modals
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -58,6 +63,19 @@ export const ProductsPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const data = await categoryApi.getCategories();
+      setCategories(data);
+    } catch (err) {
+      console.error('Failed to fetch categories', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   useEffect(() => {
     fetchProducts();
@@ -92,6 +110,13 @@ export const ProductsPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="btn btn-outline"
+            >
+              <Tags size={18} />
+              Categories
+            </button>
             <button
               onClick={() => setIsBulkModalOpen(true)}
               className="btn btn-secondary"
@@ -150,8 +175,11 @@ export const ProductsPage: React.FC = () => {
                   style={{ width: '100%' }}
                 >
                   <option value="">All Categories</option>
-                  <option value={1}>SERVIDORES (Physical Hardware)</option>
-                  <option value={2}>CLOUD (Virtual Infrastructure)</option>
+                  {categories.map((cat) => (
+                    <option key={cat.categoryId} value={cat.categoryId}>
+                      {cat.categoryName} ({cat.productCount})
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -329,6 +357,16 @@ export const ProductsPage: React.FC = () => {
         isOpen={isBulkModalOpen}
         onClose={() => setIsBulkModalOpen(false)}
         onSuccess={() => {
+          fetchProducts();
+        }}
+      />
+
+      {/* Category Management Modal */}
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onCategoriesChanged={() => {
+          fetchCategories();
           fetchProducts();
         }}
       />

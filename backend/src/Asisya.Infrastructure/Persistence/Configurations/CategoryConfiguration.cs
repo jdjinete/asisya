@@ -33,5 +33,11 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         // B-tree index on CategoryName to optimize alphabetical listing and lookup by name
         builder.HasIndex(c => c.CategoryName)
             .HasDatabaseName("IX_Categories_CategoryName");
+
+        // 1:N Relationship Category -> Products with ON DELETE RESTRICT
+        builder.HasMany(c => c.Products)
+            .WithOne(p => p.Category)
+            .HasForeignKey(p => p.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
