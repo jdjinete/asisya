@@ -1,9 +1,8 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace Asisya.Application.Common.Models;
 
 /// <summary>
 /// Generic paginated response envelope providing items and pagination metadata.
+/// Pure domain/application model decoupled from any data access infrastructure.
 /// </summary>
 /// <typeparam name="T">The type of items contained in the page.</typeparam>
 public class PaginatedList<T>
@@ -53,23 +52,5 @@ public class PaginatedList<T>
         TotalItems = count;
         TotalPages = (int)Math.Ceiling(count / (double)pageSize);
         Items = items;
-    }
-
-    /// <summary>
-    /// Creates a paginated list asynchronously from an EF Core IQueryable source.
-    /// </summary>
-    public static async Task<PaginatedList<T>> CreateAsync(
-        IQueryable<T> source,
-        int pageIndex,
-        int pageSize,
-        CancellationToken cancellationToken = default)
-    {
-        var count = await source.CountAsync(cancellationToken);
-        var items = await source
-            .Skip((pageIndex - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
-
-        return new PaginatedList<T>(items, count, pageIndex, pageSize);
     }
 }
