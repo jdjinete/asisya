@@ -24,12 +24,25 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not configured in application settings.");
-
         // Register HTTP context and current user resolution
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        services.AddPersistenceServices(configuration);
+        services.AddMessagingServices(configuration);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers EF Core persistence, PostgreSQL connection, and auditing interceptor.
+    /// </summary>
+    public static IServiceCollection AddPersistenceServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not configured in application settings.");
 
         // Register EF Core Auditing Interceptor
         services.AddScoped<AuditableEntitySaveChangesInterceptor>();
@@ -51,7 +64,16 @@ public static class DependencyInjection
         // Register IApplicationDbContext mapping to AsisyaDbContext
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<AsisyaDbContext>());
 
-        // Configure MassTransit with RabbitMQ message broker & fault tolerance policies
+        return services;
+    }
+
+    /// <summary>
+    /// Registers MassTransit message broker configured with RabbitMQ transport and retry policies.
+    /// </summary>
+    public static IServiceCollection AddMessagingServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
         services.AddMassTransit(x =>
         {
             x.AddConsumer<Asisya.Application.Features.Products.Consumers.BulkCreateProductsConsumer>();
